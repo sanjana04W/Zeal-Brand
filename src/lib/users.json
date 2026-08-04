@@ -1,0 +1,34 @@
+[
+  {
+    "id": "usr_1",
+    "name": "Zeal Owner",
+    "email": "zeal@owner.com",
+    "password": "admin123",
+    "phone": "+94 77 000 0000",
+    "joinedDate": "Jul 2026"
+  },
+  {
+    "id": "usr_2",
+    "name": "Wenuri",
+    "email": "wenuri@gmail.com",
+    "password": "password123",
+    "phone": "+94 77 123 4567",
+    "joinedDate": "Aug 2026"
+  },
+  {
+    "id": "usr_3",
+    "name": "Customer User",
+    "email": "customer@zeal.com",
+    "password": "user123",
+    "phone": "+94 71 987 6543",
+    "joinedDate": "Aug 2026"
+  },
+  {
+    "id": "usr_1785778995267",
+    "name": "Wenuris2004",
+    "email": "wenuris2004@gmail.com",
+    "password": "123456",
+    "phone": "+94 77 123 4567",
+    "joinedDate": "Aug 2026"
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "orderId": "ZB-58394",
+    "userEmail": "wenuris2004@gmail.com",
+    "fullName": "Wenuris",
+    "phone": "0723849868",
+    "district": "Matale",
+    "address": "Budupilimaya Asala, Kadahapola, Horombawa",
+    "deliveryDate": "2026-07-30",
+    "notes": "",
+    "items": [
+      {
+        "id": "3",
+        "name": "Allover Bow Print Drop Shoulder T-Shirt - V3",
+        "price": 4290,
+        "quantity": 2,
+        "size": "L"
+      }
+    ],
+    "subtotal": 8580,
+    "delivery": 400,
+    "total": 8980,
+    "status": "SHIPPED",
+    "date": "2026-08-04T05:13:41.375Z"
+  }
+]
