@@ -2,27 +2,36 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
+declare global {
+  var __ZEAL_USERS__: any[] | undefined;
+}
+
 const usersFilePath = path.join(process.cwd(), "src", "lib", "users.json");
 
 function getUsers(): any[] {
+  if (globalThis.__ZEAL_USERS__) {
+    return globalThis.__ZEAL_USERS__;
+  }
   try {
     if (!fs.existsSync(usersFilePath)) {
-      fs.writeFileSync(usersFilePath, JSON.stringify([], null, 2));
+      globalThis.__ZEAL_USERS__ = [];
       return [];
     }
     const content = fs.readFileSync(usersFilePath, "utf8");
-    return JSON.parse(content || "[]");
+    globalThis.__ZEAL_USERS__ = JSON.parse(content || "[]");
   } catch (err) {
     console.error("Error reading users file:", err);
-    return [];
+    globalThis.__ZEAL_USERS__ = [];
   }
+  return globalThis.__ZEAL_USERS__ || [];
 }
 
 function saveUsers(users: any[]) {
+  globalThis.__ZEAL_USERS__ = users;
   try {
     fs.writeFileSync(usersFilePath, JSON.stringify(users, null, 2));
   } catch (err) {
-    console.error("Error writing users file:", err);
+    console.warn("Serverless read-only filesystem warning, users stored in server memory:", err);
   }
 }
 
