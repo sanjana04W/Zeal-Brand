@@ -29,20 +29,33 @@ export interface OrderRecord {
   date: string; // ISO string
 }
 
+declare global {
+  var __ZEAL_ORDERS__: OrderRecord[] | undefined;
+}
+
 const DB_PATH = path.join(process.cwd(), "src", "lib", "orders.json");
 
 function readOrders(): OrderRecord[] {
+  if (globalThis.__ZEAL_ORDERS__) {
+    return globalThis.__ZEAL_ORDERS__;
+  }
   try {
     const raw = fs.readFileSync(DB_PATH, "utf-8");
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    globalThis.__ZEAL_ORDERS__ = Array.isArray(parsed) ? parsed : [];
   } catch {
-    return [];
+    globalThis.__ZEAL_ORDERS__ = [];
   }
+  return globalThis.__ZEAL_ORDERS__ || [];
 }
 
 function writeOrders(orders: OrderRecord[]): void {
-  fs.writeFileSync(DB_PATH, JSON.stringify(orders, null, 2), "utf-8");
+  globalThis.__ZEAL_ORDERS__ = orders;
+  try {
+    fs.writeFileSync(DB_PATH, JSON.stringify(orders, null, 2), "utf-8");
+  } catch (err) {
+    console.warn("Serverless read-only filesystem warning, order stored in server memory:", err);
+  }
 }
 
 export const orderFileStore = {
