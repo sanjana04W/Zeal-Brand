@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   TrendingUp,
   ShoppingBag,
@@ -9,31 +9,7 @@ import {
   XCircle,
   Package,
 } from "lucide-react";
-
-interface OrderItem {
-  id: string;
-  name: string;
-  price: number;
-  quantity: number;
-  size?: string;
-}
-
-interface OrderRecord {
-  orderId: string;
-  userEmail: string;
-  fullName: string;
-  phone: string;
-  district: string;
-  address: string;
-  deliveryDate?: string;
-  notes?: string;
-  items: OrderItem[];
-  subtotal: number;
-  delivery: number;
-  total: number;
-  status: "PENDING" | "CONFIRMED" | "SHIPPED" | "DELIVERED" | "CANCELLED";
-  date: string;
-}
+import { useOrderStore } from "@/lib/orderStore";
 
 const STATUS_CONFIG = [
   { label: "PENDING",    color: "bg-amber-500",   text: "text-amber-600" },
@@ -53,23 +29,10 @@ const pixelConversions = [
 ];
 
 export default function AnalyticsDashboard() {
-  const [allOrders, setAllOrders] = useState<OrderRecord[]>([]);
+  const { allOrders } = useOrderStore();
   const [mounted, setMounted] = useState(false);
 
-  const fetchOrders = useCallback(async () => {
-    try {
-      const res = await fetch("/api/orders", { cache: "no-store" });
-      const data = await res.json();
-      setAllOrders(data.orders ?? []);
-    } catch (e) {
-      console.error("Failed to fetch analytics orders:", e);
-    }
-  }, []);
-
-  useEffect(() => {
-    setMounted(true);
-    fetchOrders();
-  }, [fetchOrders]);
+  useEffect(() => setMounted(true), []);
 
   if (!mounted) return null;
 
