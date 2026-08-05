@@ -30,28 +30,31 @@ const pixelConversions = [
 
 export default function AnalyticsDashboard() {
   const { allOrders: storeOrders } = useOrderStore();
-  const [orders, setOrders] = useState<any[]>([]);
+  const [liveOrders, setLiveOrders] = useState<any[]>([]);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    fetch("/api/orders", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data.orders) && data.orders.length > 0) {
-          setOrders(data.orders);
-        } else {
-          setOrders(storeOrders);
+    const fetchLiveData = async () => {
+      try {
+        const res = await fetch("/api/orders", { cache: "no-store" });
+        const data = await res.json();
+        if (Array.isArray(data.orders)) {
+          setLiveOrders(data.orders);
         }
-      })
-      .catch(() => {
-        setOrders(storeOrders);
-      });
-  }, [storeOrders]);
+      } catch {
+        /* fallback */
+      }
+    };
+
+    fetchLiveData();
+    const interval = setInterval(fetchLiveData, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   if (!mounted) return null;
 
-  const allOrders = orders;
+  const allOrders = liveOrders.length > 0 ? liveOrders : storeOrders;
 
   // ── Computed Metrics ──────────────────────────────────────
   const totalOrders = allOrders.length;
