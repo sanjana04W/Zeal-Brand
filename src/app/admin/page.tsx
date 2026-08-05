@@ -1,16 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import {
-  DollarSign,
-  ShoppingBag,
-  Users,
-  Clock,
-  ArrowUpRight,
-  AlertTriangle,
-  TrendingUp
-} from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import {
   DollarSign,
