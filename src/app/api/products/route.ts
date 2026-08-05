@@ -2,15 +2,32 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
+declare global {
+  var __ZEAL_PRODUCTS__: any[] | undefined;
+}
+
 const dataFilePath = path.join(process.cwd(), 'src', 'lib', 'products.json');
 
 function getProducts() {
-  const fileContents = fs.readFileSync(dataFilePath, 'utf8');
-  return JSON.parse(fileContents);
+  if (globalThis.__ZEAL_PRODUCTS__) {
+    return globalThis.__ZEAL_PRODUCTS__;
+  }
+  try {
+    const fileContents = fs.readFileSync(dataFilePath, 'utf8');
+    globalThis.__ZEAL_PRODUCTS__ = JSON.parse(fileContents);
+  } catch {
+    globalThis.__ZEAL_PRODUCTS__ = [];
+  }
+  return globalThis.__ZEAL_PRODUCTS__ || [];
 }
 
 function saveProducts(products: any[]) {
-  fs.writeFileSync(dataFilePath, JSON.stringify(products, null, 2));
+  globalThis.__ZEAL_PRODUCTS__ = products;
+  try {
+    fs.writeFileSync(dataFilePath, JSON.stringify(products, null, 2));
+  } catch (err) {
+    console.warn('Serverless read-only filesystem warning, products stored in server memory:', err);
+  }
 }
 
 // GET /api/products
