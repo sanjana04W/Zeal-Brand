@@ -50,23 +50,32 @@ export default function AdminLayout({
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { notifications, dismissNotification, dismissAll } = useNotificationStore();
+  const [notifications, setNotifications] = useState<any[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const unreadCount = notifications.length;
+  const unreadCount = notifications.filter((n) => !n.read).length;
   const [pendingOrderCount, setPendingOrderCount] = useState(0);
 
-  // Fetch live pending order count
+  // Fetch live notifications & pending orders from server
   useEffect(() => {
-    const fetchPending = async () => {
+    const fetchLiveData = async () => {
       try {
-        const res = await fetch("/api/orders", { cache: "no-store" });
-        const data = await res.json();
-        setPendingOrderCount(data.pendingCount ?? 0);
+        const [ordersRes, notifRes] = await Promise.all([
+          fetch("/api/orders", { cache: "no-store" }),
+          fetch("/api/notifications", { cache: "no-store" }),
+        ]);
+        const ordersData = await ordersRes.json();
+        const notifData = await notifRes.json();
+        
+        setPendingOrderCount(ordersData.pendingCount ?? 0);
+        if (Array.isArray(notifData.notifications)) {
+          setNotifications(notifData.notifications);
+        }
       } catch { /* ignore */ }
     };
-    fetchPending();
-    const interval = setInterval(fetchPending, 15000);
+
+    fetchLiveData();
+    const interval = setInterval(fetchLiveData, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -96,14 +105,24 @@ export default function AdminLayout({
   }, []);
 
   // Dismiss (mark as read) a single notification
-  const handleDismiss = (id: string) => {
-    dismissNotification(id);
+  const handleDismiss = async (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    try {
+      await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action: "dismiss" }),
+      });
+    } catch {}
   };
 
   // Dismiss all unread notifications
-  const handleDismissAll = () => {
-    dismissAll();
+  const handleDismissAll = async () => {
+    setNotifications([]);
     setNotifOpen(false);
+    try {
+      await fetch("/api/notifications", { method: "DELETE" });
+    } catch {}
   };
 
   // Don't show admin sidebar/header on login page
