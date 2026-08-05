@@ -57,14 +57,27 @@ export default function ProfilePage() {
       setName(user.name || "");
       setPhone(user.phone || "");
       setAddress(user.address || "No 123, Main Street, Colombo 05");
-      // Fetch all orders from server and filter by this user's email
-      fetch("/api/orders", { cache: "no-store" })
-        .then((r) => r.json())
-        .then((data) => {
-          const all = data.orders ?? [];
-          setUserOrders(all.filter((o: {userEmail: string}) => o.userEmail === user.email));
-        })
-        .catch(() => {});
+
+      const fetchOrders = () => {
+        if (!user?.email) return;
+        fetch("/api/orders", { cache: "no-store" })
+          .then((r) => r.json())
+          .then((data) => {
+            const all = data.orders ?? [];
+            const userEmailClean = user.email.trim().toLowerCase();
+            setUserOrders(
+              all.filter(
+                (o: { userEmail: string }) =>
+                  o.userEmail && o.userEmail.trim().toLowerCase() === userEmailClean
+              )
+            );
+          })
+          .catch(() => {});
+      };
+
+      fetchOrders();
+      const interval = setInterval(fetchOrders, 10000);
+      return () => clearInterval(interval);
     }
   }, [user]);
 
