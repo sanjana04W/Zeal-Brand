@@ -16,20 +16,33 @@ export interface Message {
   createdAt: number;
 }
 
+declare global {
+  var __ZEAL_MESSAGES__: Message[] | undefined;
+}
+
 const DB_PATH = path.join(process.cwd(), "src", "lib", "messages.json");
 
 function readMessages(): Message[] {
+  if (globalThis.__ZEAL_MESSAGES__) {
+    return globalThis.__ZEAL_MESSAGES__;
+  }
   try {
     const raw = fs.readFileSync(DB_PATH, "utf-8");
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    globalThis.__ZEAL_MESSAGES__ = Array.isArray(parsed) ? parsed : [];
   } catch {
-    return [];
+    globalThis.__ZEAL_MESSAGES__ = [];
   }
+  return globalThis.__ZEAL_MESSAGES__ || [];
 }
 
 function writeMessages(messages: Message[]): void {
-  fs.writeFileSync(DB_PATH, JSON.stringify(messages, null, 2), "utf-8");
+  globalThis.__ZEAL_MESSAGES__ = messages;
+  try {
+    fs.writeFileSync(DB_PATH, JSON.stringify(messages, null, 2), "utf-8");
+  } catch (err) {
+    console.warn("Serverless read-only filesystem warning, message stored in server memory:", err);
+  }
 }
 
 export const messageStore = {
