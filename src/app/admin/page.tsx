@@ -11,34 +11,23 @@ import {
   AlertTriangle,
   TrendingUp
 } from "lucide-react";
-import { OrderRecord } from "@/lib/orderFileStore";
+import { useOrderStore } from "@/lib/orderStore";
 
 export default function AdminDashboard() {
-  const [orders, setOrders] = useState<OrderRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { allOrders } = useOrderStore();
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    async function fetchOrders() {
-      try {
-        const res = await fetch("/api/orders", { cache: "no-store" });
-        const data = await res.json();
-        setOrders(data.orders ?? []);
-      } catch (err) {
-        console.error("Failed to fetch dashboard orders", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchOrders();
-    const interval = setInterval(fetchOrders, 15000);
-    return () => clearInterval(interval);
+    setMounted(true);
   }, []);
 
-  const totalRevenue = orders.reduce((sum, o) => sum + (o.status !== "CANCELLED" ? o.total : 0), 0);
-  const totalOrders = orders.length;
-  const pendingOrdersCount = orders.filter((o) => o.status === "PENDING").length;
+  if (!mounted) return null;
 
-  const recentOrders = orders.slice(0, 5);
+  const totalRevenue = allOrders.reduce((sum, o) => sum + o.total, 0);
+  const totalOrders = allOrders.length;
+  const pendingOrdersCount = allOrders.filter((o) => o.status === "PENDING").length;
+
+  const recentOrders = allOrders.slice(0, 5);
 
   const lowStockItems = [
     { name: "Oversized 'Acid Wash' Tee", badge: "1 left", badgeColor: "bg-neutral-100 text-neutral-800 border-neutral-300" },
@@ -109,7 +98,7 @@ export default function AdminDashboard() {
               TOTAL CUSTOMERS
             </span>
             <h3 className="text-2xl font-black text-neutral-900 tracking-tight">
-              {new Set(orders.map((o) => o.userEmail)).size}
+              {new Set(allOrders.map((o) => o.userEmail)).size}
             </h3>
             <p className="text-xs font-bold text-emerald-600 flex items-center gap-1 mt-1">
               <TrendingUp size={12} /> Unique ordering customers
