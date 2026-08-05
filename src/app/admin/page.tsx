@@ -14,14 +14,32 @@ import {
 import { useOrderStore } from "@/lib/orderStore";
 
 export default function AdminDashboard() {
-  const { allOrders } = useOrderStore();
+  const { allOrders: storeOrders } = useOrderStore();
+  const [liveOrders, setLiveOrders] = useState<any[]>([]);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+    const fetchLiveData = async () => {
+      try {
+        const res = await fetch("/api/orders", { cache: "no-store" });
+        const data = await res.json();
+        if (Array.isArray(data.orders)) {
+          setLiveOrders(data.orders);
+        }
+      } catch {
+        /* fallback to store */
+      }
+    };
+
+    fetchLiveData();
+    const interval = setInterval(fetchLiveData, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   if (!mounted) return null;
+
+  const allOrders = liveOrders.length > 0 ? liveOrders : storeOrders;
 
   const totalRevenue = allOrders.reduce((sum, o) => sum + o.total, 0);
   const totalOrders = allOrders.length;
