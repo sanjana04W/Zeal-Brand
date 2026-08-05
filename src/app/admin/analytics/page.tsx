@@ -29,34 +29,26 @@ const pixelConversions = [
 ];
 
 export default function AnalyticsDashboard() {
-  const { allOrders: storeOrders } = useOrderStore();
-  const [orders, setOrders] = useState<any[]>([]);
+  const [allOrders, setAllOrders] = useState<any[]>([]);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    const fetchOrders = async () => {
+    async function loadOrders() {
       try {
         const res = await fetch("/api/orders", { cache: "no-store" });
-        const data = await res.json();
-        if (Array.isArray(data.orders)) {
-          setOrders(data.orders);
-        } else {
-          setOrders(storeOrders);
+        if (res.ok) {
+          const data = await res.json();
+          setAllOrders(data.orders || []);
         }
-      } catch {
-        setOrders(storeOrders);
+      } catch (err) {
+        console.error("Failed to load analytics orders:", err);
       }
-    };
-
-    fetchOrders();
-    const interval = setInterval(fetchOrders, 10000);
-    return () => clearInterval(interval);
-  }, [storeOrders]);
+    }
+    loadOrders();
+  }, []);
 
   if (!mounted) return null;
-
-  const allOrders = orders;
 
   // ── Computed Metrics ──────────────────────────────────────
   const totalOrders = allOrders.length;

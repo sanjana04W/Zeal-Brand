@@ -2,25 +2,41 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { use } from "react";
+import { useState, useEffect, use } from "react";
 import { Filter, ChevronDown } from "lucide-react";
-
-// Reusing mock data for structure
-const PRODUCTS = [
-  { id: "1", name: "Oversized 'Acid Wash' Graphic Tee", price: 4500, image: "/Images/tshirts/FB_IMG_1785245490163.jpg", category: "oversized", badge: "NEW DROP" },
-  { id: "6", name: "Box Fit Heavy Cotton - Olive", price: 3800, image: "/Images/tshirts/FB_IMG_1785245492198.jpg", category: "oversized" },
-  { id: "2", name: "Classic Logo Premium Tee - Black", price: 3200, image: "/Images/tshirts/FB_IMG_1785245498132.jpg", category: "graphic-tees" },
-  { id: "5", name: "Cyberpunk Edition Graphic Print", price: 4200, image: "/Images/tshirts/FB_IMG_1785245500425.jpg", category: "graphic-tees" },
-  { id: "4", name: "Essential Heavyweight Tee - White", price: 3500, image: "/Images/tshirts/FB_IMG_1785245502582.jpg", category: "basic-tees" },
-];
 
 export default function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {
   const resolvedParams = use(params);
   const slug = resolvedParams.slug;
-  
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadProducts() {
+      try {
+        const res = await fetch("/api/products", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          setProducts(data);
+        }
+      } catch (err) {
+        console.error("Error loading products for category:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadProducts();
+  }, []);
+
   // Format slug to readable category title
   const categoryTitle = slug.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-  const categoryProducts = PRODUCTS.filter(p => p.category === slug);
+  const categoryProducts = products.filter(
+    p =>
+      (p.category && p.category.toLowerCase().replace(/\s+/g, '-') === slug.toLowerCase()) ||
+      (p.mainCategory && p.mainCategory.toLowerCase().replace(/\s+/g, '-') === slug.toLowerCase()) ||
+      (p.subCategory && p.subCategory.toLowerCase().replace(/\s+/g, '-') === slug.toLowerCase()) ||
+      (p.styleCategory && p.styleCategory.toLowerCase().replace(/\s+/g, '-') === slug.toLowerCase())
+  );
 
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">

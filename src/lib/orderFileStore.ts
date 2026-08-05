@@ -29,51 +29,35 @@ export interface OrderRecord {
   date: string; // ISO string
 }
 
-import os from "os";
+const DB_PATH = path.join(process.cwd(), "src", "lib", "orders.json");
 
 declare global {
-  var __ZEAL_ORDERS__: OrderRecord[] | undefined;
+  var __ordersCache: OrderRecord[] | undefined;
 }
 
-const SEED_PATH = path.join(process.cwd(), "src", "lib", "orders.json");
-const TMP_PATH = path.join(os.tmpdir(), "zeal_orders.json");
-
 function readOrders(): OrderRecord[] {
-  if (globalThis.__ZEAL_ORDERS__) {
-    return globalThis.__ZEAL_ORDERS__;
+  if (globalThis.__ordersCache) {
+    return globalThis.__ordersCache;
   }
-
-  // 1. Try reading from writable serverless temp storage
   try {
-    if (fs.existsSync(TMP_PATH)) {
-      const raw = fs.readFileSync(TMP_PATH, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        globalThis.__ZEAL_ORDERS__ = parsed;
-        return globalThis.__ZEAL_ORDERS__;
-      }
-    }
-  } catch {}
-
-  // 2. Fall back to repository seed file
-  try {
-    const raw = fs.readFileSync(SEED_PATH, "utf-8");
+    const raw = fs.readFileSync(DB_PATH, "utf-8");
     const parsed = JSON.parse(raw);
-    globalThis.__ZEAL_ORDERS__ = Array.isArray(parsed) ? parsed : [];
+    const result = Array.isArray(parsed) ? parsed : [];
+    globalThis.__ordersCache = result;
+    return result;
   } catch {
-    globalThis.__ZEAL_ORDERS__ = [];
+    globalThis.__ordersCache = [];
+    return [];
   }
-  return globalThis.__ZEAL_ORDERS__ || [];
 }
 
 function writeOrders(orders: OrderRecord[]): void {
-  globalThis.__ZEAL_ORDERS__ = orders;
+  globalThis.__ordersCache = orders;
   try {
-    fs.writeFileSync(TMP_PATH, JSON.stringify(orders, null, 2), "utf-8");
-  } catch {}
-  try {
-    fs.writeFileSync(SEED_PATH, JSON.stringify(orders, null, 2), "utf-8");
-  } catch {}
+    fs.writeFileSync(DB_PATH, JSON.stringify(orders, null, 2), "utf-8");
+  } catch (err) {
+    console.warn("Could not persist orders.json to disk (expected in serverless environments):", err);
+  }
 }
 
 export const orderFileStore = {
@@ -85,7 +69,13 @@ export const orderFileStore = {
 
   add(order: OrderRecord): OrderRecord {
     const orders = readOrders();
-    orders.unshift(order);
+    // Check if order already exists to prevent duplicate submission
+    const existingIdx = orders.findIndex((o) => o.orderId === order.orderId);
+    if (existingIdx !== -1) {
+      orders[existingIdx] = order;
+    } else {
+      orders.unshift(order);
+    }
     writeOrders(orders);
     return order;
   },
@@ -109,3 +99,4 @@ export const orderFileStore = {
       .reduce((sum, o) => sum + o.total, 0);
   },
 };
+

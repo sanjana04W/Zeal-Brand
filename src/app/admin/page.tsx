@@ -14,53 +14,74 @@ import {
 import { useOrderStore } from "@/lib/orderStore";
 
 export default function AdminDashboard() {
-  const { allOrders: storeOrders } = useOrderStore();
-  const [orders, setOrders] = useState<any[]>([]);
+  const [allOrders, setAllOrders] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setMounted(true);
-    const fetchOrders = async () => {
+    async function loadData() {
       try {
-        const res = await fetch("/api/orders", { cache: "no-store" });
-        const data = await res.json();
-        if (Array.isArray(data.orders)) {
-          setOrders(data.orders);
-        } else {
-          setOrders(storeOrders);
-        }
-      } catch {
-        setOrders(storeOrders);
-      }
-    };
+        const [ordersRes, productsRes] = await Promise.all([
+          fetch("/api/orders", { cache: "no-store" }),
+          fetch("/api/products", { cache: "no-store" }),
+        ]);
 
-    fetchOrders();
-    const interval = setInterval(fetchOrders, 10000);
+        if (ordersRes.ok) {
+          const ordersData = await ordersRes.json();
+          setAllOrders(ordersData.orders || []);
+        }
+
+        if (productsRes.ok) {
+          const productsData = await productsRes.json();
+          setProducts(productsData || []);
+        }
+      } catch (err) {
+        console.error("Failed to load admin dashboard data:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
+    const interval = setInterval(loadData, 10000);
     return () => clearInterval(interval);
-  }, [storeOrders]);
+  }, []);
 
   if (!mounted) return null;
-
-  const allOrders = orders;
 
   const totalRevenue = allOrders.reduce((sum, o) => sum + (o.total || 0), 0);
   const totalOrders = allOrders.length;
   const pendingOrdersCount = allOrders.filter((o) => o.status === "PENDING").length;
+
   const recentOrders = allOrders.slice(0, 5);
 
-  const lowStockItems = [
-    { name: "Oversized 'Acid Wash' Tee", badge: "1 left", badgeColor: "bg-neutral-100 text-neutral-800 border-neutral-300" },
-    { name: "Classic Logo Premium Tee", badge: "Out of Stock", badgeColor: "bg-red-100 text-red-700 border-red-200" },
-    { name: "Vintage '84 Streetwear Edition", badge: "3 left", badgeColor: "bg-neutral-100 text-neutral-800 border-neutral-300" },
-  ];
+  const lowStockItems = products.length > 0
+    ? products.slice(0, 3).map((p, idx) => ({
+        name: p.name,
+        badge: p.inStock ? `${(idx % 3) + 1} left` : "Out of Stock",
+        badgeColor: p.inStock ? "bg-neutral-100 text-neutral-800 border-neutral-300" : "bg-red-100 text-red-700 border-red-200"
+      }))
+    : [
+        { name: "Oversized 'Acid Wash' Tee", badge: "1 left", badgeColor: "bg-neutral-100 text-neutral-800 border-neutral-300" },
+        { name: "Classic Logo Premium Tee", badge: "Out of Stock", badgeColor: "bg-red-100 text-red-700 border-red-200" },
+        { name: "Vintage '84 Streetwear Edition", badge: "3 left", badgeColor: "bg-neutral-100 text-neutral-800 border-neutral-300" },
+      ];
 
-  const topProducts = [
-    { name: "Oversized 'Acid Wash' Tee", percentage: 100, barColor: "bg-neutral-900" },
-    { name: "Classic Logo Premium Tee", percentage: 60, barColor: "bg-neutral-800" },
-    { name: "Allover Bow Print Drop Shoulder", percentage: 40, barColor: "bg-neutral-700" },
-    { name: "Vintage '84 Streetwear Edition", percentage: 20, barColor: "bg-neutral-600" },
-    { name: "Graphic Streetwear Tee", percentage: 20, barColor: "bg-neutral-500" },
-  ];
+  const topProducts = products.length > 0
+    ? products.slice(0, 5).map((p, idx) => ({
+        name: p.name,
+        percentage: 100 - idx * 18,
+        barColor: `bg-neutral-${900 - idx * 100}`
+      }))
+    : [
+        { name: "Oversized 'Acid Wash' Tee", percentage: 100, barColor: "bg-neutral-900" },
+        { name: "Classic Logo Premium Tee", percentage: 60, barColor: "bg-neutral-800" },
+        { name: "Allover Bow Print Drop Shoulder", percentage: 40, barColor: "bg-neutral-700" },
+        { name: "Vintage '84 Streetwear Edition", percentage: 20, barColor: "bg-neutral-600" },
+        { name: "Graphic Streetwear Tee", percentage: 20, barColor: "bg-neutral-500" },
+      ];
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">

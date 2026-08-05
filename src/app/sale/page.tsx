@@ -50,27 +50,49 @@ export default function SalePage() {
   const { addItem, toggleCart } = useCartStore();
   const { h, m, s } = useCountdown();
 
+  const [productsList, setProductsList] = useState<any[]>(PRODUCTS);
   const [sort, setSort] = useState("discount");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [showCount, setShowCount] = useState(24);
 
-  const categories = useMemo(() => {
-    const cats = new Set<string>(SALE_PRODUCTS.map((p) => p.mainCategory));
-    return ["All", ...Array.from(cats)];
+  useEffect(() => {
+    async function fetchLiveProducts() {
+      try {
+        const res = await fetch("/api/products", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setProductsList(data);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch products for sale page:", err);
+      }
+    }
+    fetchLiveProducts();
   }, []);
+
+  const saleProducts = useMemo(() => {
+    return productsList.filter((p) => p.originalPrice || (p.badge && String(p.badge).startsWith("-")));
+  }, [productsList]);
+
+  const categories = useMemo(() => {
+    const cats = new Set<string>(saleProducts.map((p) => p.mainCategory));
+    return ["All", ...Array.from(cats)];
+  }, [saleProducts]);
 
   const displayed = useMemo(() => {
     let list = categoryFilter === "All"
-      ? SALE_PRODUCTS
-      : SALE_PRODUCTS.filter((p) => p.mainCategory === categoryFilter);
+      ? saleProducts
+      : saleProducts.filter((p) => p.mainCategory === categoryFilter);
 
-    if (sort === "discount") list = [...list].sort((a, b) => getDiscount(b.price, b.originalPrice) - getDiscount(a.price, a.originalPrice));
+    if (sort === "discount") list = [...list].sort((a, b) => getDiscount(b.price, b.originalPrice || b.price) - getDiscount(a.price, a.originalPrice || a.price));
     else if (sort === "priceLow") list = [...list].sort((a, b) => a.price - b.price);
     else if (sort === "priceHigh") list = [...list].sort((a, b) => b.price - a.price);
-    else if (sort === "saving") list = [...list].sort((a, b) => (b.originalPrice - b.price) - (a.originalPrice - a.price));
+    else if (sort === "saving") list = [...list].sort((a, b) => ((b.originalPrice || b.price) - b.price) - ((a.originalPrice || a.price) - a.price));
 
     return list.slice(0, showCount);
-  }, [sort, categoryFilter, showCount]);
+  }, [saleProducts, sort, categoryFilter, showCount]);
 
   const totalSavings = SALE_PRODUCTS.reduce((acc, p) => acc + (p.originalPrice - p.price), 0);
 

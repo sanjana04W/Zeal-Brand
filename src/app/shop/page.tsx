@@ -12,11 +12,30 @@ const MAX_PRICE_LIMIT = 50000;
 function ShopContent() {
   const searchParams = useSearchParams();
 
+  const [productsList, setProductsList] = useState<any[]>(PRODUCTS);
   const [filter, setFilter] = useState<{ main?: string; sub?: string; style?: string }>({});
   const [keyword, setKeyword] = useState("");
   const [maxPrice, setMaxPrice] = useState(MAX_PRICE_LIMIT);
   const [sort, setSort] = useState("Newest");
   const [showCount, setShowCount] = useState(24);
+
+  // Fetch dynamic products from /api/products
+  useEffect(() => {
+    async function fetchLiveProducts() {
+      try {
+        const res = await fetch("/api/products", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setProductsList(data);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch live products for shop:", err);
+      }
+    }
+    fetchLiveProducts();
+  }, []);
 
   // Read URL query params on mount
   useEffect(() => {
@@ -26,11 +45,11 @@ function ShopContent() {
   }, [searchParams]);
 
   // Compute max price from current products so slider feels relevant
-  const allPrices = PRODUCTS.map((p) => p.price);
-  const absoluteMax = Math.max(...allPrices);
+  const allPrices = productsList.map((p) => p.price);
+  const absoluteMax = allPrices.length > 0 ? Math.max(...allPrices) : MAX_PRICE_LIMIT;
 
   const filteredAndSorted = useMemo(() => {
-    let result = PRODUCTS.filter((p) => {
+    let result = productsList.filter((p) => {
       if (filter.main && p.mainCategory !== filter.main) return false;
       if (filter.sub && p.subCategory !== filter.sub && p.styleCategory !== filter.sub && p.category !== filter.sub) return false;
       if (filter.style && p.styleCategory !== filter.style) return false;
@@ -46,10 +65,10 @@ function ShopContent() {
     // Only apply showCount limit when a filter is active; All Categories shows everything
     const isFiltered = filter.main || filter.sub || filter.style || keyword || maxPrice < MAX_PRICE_LIMIT;
     return isFiltered ? result.slice(0, showCount) : result;
-  }, [filter, keyword, maxPrice, sort, showCount]);
+  }, [productsList, filter, keyword, maxPrice, sort, showCount]);
 
   const totalMatching = useMemo(() => {
-    return PRODUCTS.filter((p) => {
+    return productsList.filter((p) => {
       if (filter.main && p.mainCategory !== filter.main) return false;
       if (filter.sub && p.subCategory !== filter.sub && p.styleCategory !== filter.sub && p.category !== filter.sub) return false;
       if (filter.style && p.styleCategory !== filter.style) return false;
@@ -57,7 +76,7 @@ function ShopContent() {
       if (p.price > maxPrice) return false;
       return true;
     }).length;
-  }, [filter, keyword, maxPrice]);
+  }, [productsList, filter, keyword, maxPrice]);
 
   const CATEGORY_TREE = [
     {

@@ -2,36 +2,39 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 
-declare global {
-  var __ZEAL_USERS__: any[] | undefined;
-}
-
 const usersFilePath = path.join(process.cwd(), "src", "lib", "users.json");
 
+declare global {
+  var __usersCache: any[] | undefined;
+}
+
 function getUsers(): any[] {
-  if (globalThis.__ZEAL_USERS__) {
-    return globalThis.__ZEAL_USERS__;
+  if (globalThis.__usersCache) {
+    return globalThis.__usersCache;
   }
   try {
     if (!fs.existsSync(usersFilePath)) {
-      globalThis.__ZEAL_USERS__ = [];
+      globalThis.__usersCache = [];
       return [];
     }
     const content = fs.readFileSync(usersFilePath, "utf8");
-    globalThis.__ZEAL_USERS__ = JSON.parse(content || "[]");
+    const parsed = JSON.parse(content || "[]");
+    const result = Array.isArray(parsed) ? parsed : [];
+    globalThis.__usersCache = result;
+    return result;
   } catch (err) {
     console.error("Error reading users file:", err);
-    globalThis.__ZEAL_USERS__ = [];
+    globalThis.__usersCache = [];
+    return [];
   }
-  return globalThis.__ZEAL_USERS__ || [];
 }
 
 function saveUsers(users: any[]) {
-  globalThis.__ZEAL_USERS__ = users;
+  globalThis.__usersCache = users;
   try {
     fs.writeFileSync(usersFilePath, JSON.stringify(users, null, 2));
   } catch (err) {
-    console.warn("Serverless read-only filesystem warning, users stored in server memory:", err);
+    console.warn("Error writing users file (expected in serverless environments):", err);
   }
 }
 

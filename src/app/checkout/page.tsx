@@ -292,84 +292,64 @@ export default function Checkout() {
   };
 
   const handleVerifyCode = async () => {
-    const cleanEntered = enteredCode.trim();
-    const cleanGenerated = generatedCode.trim();
-
-    if (cleanEntered !== cleanGenerated) {
+    if (enteredCode !== generatedCode) {
       setVerificationError("Invalid verification code. Please try again.");
       return;
     }
 
     setIsSubmitting(true);
-    setVerificationError("");
+    const fd = capturedFormData;
+    const delivery = 400;
+    const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+    const randomId = Math.floor(Math.random() * 90000) + 10000;
+    const orderId = `ZB-${randomId}`;
+
+    const orderRecord = {
+      orderId,
+      userEmail: (fd?.get("email") as string) || user?.email || "",
+      fullName: (fd?.get("firstName") as string) || user?.name || "",
+      phone: (fd?.get("phone") as string) || "",
+      district: (fd?.get("district") as string) || "",
+      address: (fd?.get("address") as string) || "",
+      deliveryDate: (fd?.get("deliveryDate") as string) || "",
+      notes: (fd?.get("notes") as string) || "",
+      items: items.map((i) => ({
+        id: i.id,
+        name: i.name,
+        price: i.price,
+        quantity: i.quantity,
+        size: i.size,
+      })),
+      subtotal,
+      delivery,
+      total: subtotal + delivery,
+      status: "PENDING" as const,
+      date: new Date().toISOString(),
+    };
 
     try {
-      const fd = capturedFormData;
-      const delivery = 400;
-      const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
-      const randomId = Math.floor(Math.random() * 90000) + 10000;
-      const orderId = `ZB-${randomId}`;
-
-      const orderRecord = {
-        orderId,
-        userEmail: (fd?.get("email") as string) || user?.email || "",
-        fullName: (fd?.get("firstName") as string) || user?.name || "",
-        phone: (fd?.get("phone") as string) || "",
-        district: (fd?.get("district") as string) || "",
-        address: (fd?.get("address") as string) || "",
-        deliveryDate: (fd?.get("deliveryDate") as string) || "",
-        notes: (fd?.get("notes") as string) || "",
-        items: items.map((i) => ({
-          id: i.id,
-          name: i.name,
-          price: i.price,
-          quantity: i.quantity,
-          size: i.size,
-        })),
-        subtotal,
-        delivery,
-        total: subtotal + delivery,
-        status: "PENDING" as const,
-        date: new Date().toISOString(),
-      };
-
-      // Set timeout for fetch request so it never hangs
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-      try {
-        await fetch("/api/orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(orderRecord),
-          signal: controller.signal,
-        });
-      } catch (err) {
-        console.warn("Order save to server warning:", err);
-      } finally {
-        clearTimeout(timeoutId);
-      }
-
-      // Update client store & notifications
-      setLastOrder(orderRecord);
-
-      try {
-        addNotification({
-          type: "ORDER",
-          title: "New Order Placed",
-          subtitle: orderId,
-          detail: `${orderRecord.fullName || "Customer"} placed an order for Rs. ${orderRecord.total.toLocaleString()}`,
-          link: "/admin/orders",
-        });
-      } catch {}
-
-      clearCart();
-      router.push(`/order-confirmation/${orderId}`);
-    } catch (err) {
-      console.error("Order completion error:", err);
-      setVerificationError("Failed to complete order. Please try again.");
-      setIsSubmitting(false);
+      // Persist order to server (survives restarts & re-logins)
+      await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(orderRecord),
+      });
+    } catch {
+      // Non-blocking: still proceed even if server save fails
     }
+
+    // Keep last order in memory for confirmation page
+    setLastOrder(orderRecord);
+
+    addNotification({
+      type: "ORDER",
+      title: "New Order Placed",
+      subtitle: orderId,
+      detail: `${orderRecord.fullName || "Customer"} placed an order for Rs. ${orderRecord.total.toLocaleString()}`,
+      link: "/admin/orders",
+    });
+    clearCart();
+    router.push(`/order-confirmation/${orderId}`);
   };
 
   return (

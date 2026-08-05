@@ -2,50 +2,36 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
-import os from 'os';
+const dataFilePath = path.join(process.cwd(), 'src', 'lib', 'products.json');
 
 declare global {
-  var __ZEAL_PRODUCTS__: any[] | undefined;
+  var __productsCache: any[] | undefined;
 }
 
-const SEED_PATH = path.join(process.cwd(), 'src', 'lib', 'products.json');
-const TMP_PATH = path.join(os.tmpdir(), 'zeal_products.json');
-
 function getProducts() {
-  if (globalThis.__ZEAL_PRODUCTS__) {
-    return globalThis.__ZEAL_PRODUCTS__;
+  if (globalThis.__productsCache) {
+    return globalThis.__productsCache;
   }
-
-  // 1. Try reading from writable serverless temp storage
   try {
-    if (fs.existsSync(TMP_PATH)) {
-      const raw = fs.readFileSync(TMP_PATH, 'utf-8');
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        globalThis.__ZEAL_PRODUCTS__ = parsed;
-        return globalThis.__ZEAL_PRODUCTS__;
-      }
-    }
-  } catch {}
-
-  // 2. Fall back to repository seed file
-  try {
-    const fileContents = fs.readFileSync(SEED_PATH, 'utf8');
-    globalThis.__ZEAL_PRODUCTS__ = JSON.parse(fileContents);
-  } catch {
-    globalThis.__ZEAL_PRODUCTS__ = [];
+    const fileContents = fs.readFileSync(dataFilePath, 'utf8');
+    const parsed = JSON.parse(fileContents);
+    const result = Array.isArray(parsed) ? parsed : [];
+    globalThis.__productsCache = result;
+    return result;
+  } catch (error) {
+    console.warn("Could not read products.json, initializing empty cache:", error);
+    globalThis.__productsCache = [];
+    return [];
   }
-  return globalThis.__ZEAL_PRODUCTS__ || [];
 }
 
 function saveProducts(products: any[]) {
-  globalThis.__ZEAL_PRODUCTS__ = products;
+  globalThis.__productsCache = products;
   try {
-    fs.writeFileSync(TMP_PATH, JSON.stringify(products, null, 2));
-  } catch {}
-  try {
-    fs.writeFileSync(SEED_PATH, JSON.stringify(products, null, 2));
-  } catch {}
+    fs.writeFileSync(dataFilePath, JSON.stringify(products, null, 2));
+  } catch (error) {
+    console.warn("Could not persist products.json to disk (expected in serverless environments):", error);
+  }
 }
 
 // GET /api/products

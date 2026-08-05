@@ -17,13 +17,7 @@ import {
 import { usePromoStore, Promotion } from "@/lib/promoStore";
 
 export default function PromotionsManagement() {
-  const {
-    promotions,
-    addPromotion,
-    updatePromotion,
-    togglePause,
-    deletePromotion,
-  } = usePromoStore();
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [mounted, setMounted] = useState(false);
 
   // Modal State
@@ -44,8 +38,21 @@ export default function PromotionsManagement() {
   // Delete State
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const fetchPromos = async () => {
+    try {
+      const res = await fetch("/api/promotions", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setPromotions(data.promotions || []);
+      }
+    } catch (err) {
+      console.error("Error fetching promotions:", err);
+    }
+  };
+
   useEffect(() => {
     setMounted(true);
+    fetchPromos();
   }, []);
 
   if (!mounted) return null;
@@ -77,35 +84,48 @@ export default function PromotionsManagement() {
   };
 
   // Submit Form
-  const handleSubmitForm = (e: React.FormEvent) => {
+  const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle || !formCode) return;
 
-    if (editingPromo) {
-      updatePromotion(editingPromo.id, {
-        title: formTitle,
-        description: formDescription,
-        code: formCode.toUpperCase(),
-        discount: formDiscount,
-        type: formDiscount.includes("%") ? "Percentage" : "Fixed Amount",
-        category: formCategory,
-        status: formStatus,
-        expiry: formExpiry,
-      });
-    } else {
-      addPromotion({
-        title: formTitle,
-        description: formDescription,
-        code: formCode.toUpperCase(),
-        discount: formDiscount,
-        type: formDiscount.includes("%") ? "Percentage" : "Fixed Amount",
-        category: formCategory,
-        status: formStatus,
-        expiry: formExpiry,
-      });
-    }
+    const payload = {
+      id: editingPromo?.id,
+      title: formTitle,
+      description: formDescription,
+      code: formCode.toUpperCase(),
+      discount: formDiscount,
+      type: formDiscount.includes("%") ? "Percentage" : "Fixed Amount",
+      category: formCategory,
+      status: formStatus,
+      expiry: formExpiry,
+    };
 
+    await fetch("/api/promotions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    fetchPromos();
     setIsModalOpen(false);
+  };
+
+  const togglePause = async (id: string) => {
+    const target = promotions.find((p) => p.id === id);
+    if (!target) return;
+    const newStatus = target.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
+    await fetch("/api/promotions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...target, status: newStatus }),
+    });
+    fetchPromos();
+  };
+
+  const deletePromotion = async (id: string) => {
+    await fetch(`/api/promotions?id=${id}`, { method: "DELETE" });
+    fetchPromos();
+    setDeletingId(null);
   };
 
   const getStatusBadge = (status: Promotion["status"]) => {

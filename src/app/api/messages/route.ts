@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { messageStore } from "@/lib/messageStore";
-import { notificationFileStore } from "@/lib/notificationFileStore";
 
 // GET /api/messages — returns all messages
 export async function GET() {
@@ -29,16 +28,6 @@ export async function POST(req: NextRequest) {
       subject: String(subject || message).trim().slice(0, 80),
       message: String(message).trim(),
     });
-
-    try {
-      notificationFileStore.add({
-        type: "MESSAGE",
-        title: "New Contact Message",
-        subtitle: newMsg.name,
-        detail: `${newMsg.email}: "${newMsg.message.slice(0, 45)}${newMsg.message.length > 45 ? "..." : ""}"`,
-        link: "/admin/messages",
-      });
-    } catch {}
 
     return NextResponse.json({ success: true, message: newMsg }, { status: 201 });
   } catch {

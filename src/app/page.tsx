@@ -5,12 +5,28 @@ import { motion } from "framer-motion";
 import { ArrowRight, ShoppingBag, Star, MapPin, Quote } from "lucide-react";
 import Image from "next/image";
 
+import { useState, useEffect } from "react";
 import { PRODUCTS } from "@/lib/products";
 
-// Get first 4 products for featured section
-const FEATURED_PRODUCTS = PRODUCTS.slice(0, 4);
-
 export default function Home() {
+  const [featuredProducts, setFeaturedProducts] = useState<any[]>(PRODUCTS.slice(0, 4));
+
+  useEffect(() => {
+    async function loadProducts() {
+      try {
+        const res = await fetch("/api/products");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setFeaturedProducts(data.slice(0, 4));
+          }
+        }
+      } catch (err) {
+        console.error("Error loading featured products:", err);
+      }
+    }
+    loadProducts();
+  }, []);
   return (
     <div className="flex flex-col min-h-screen">
       
@@ -173,7 +189,7 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 md:gap-8">
-            {FEATURED_PRODUCTS.map((product, idx) => (
+            {featuredProducts.map((product, idx) => (
               <motion.div 
                 key={product.id}
                 initial={{ opacity: 0, y: 20 }}

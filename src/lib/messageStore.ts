@@ -16,51 +16,35 @@ export interface Message {
   createdAt: number;
 }
 
-import os from "os";
+const DB_PATH = path.join(process.cwd(), "src", "lib", "messages.json");
 
 declare global {
-  var __ZEAL_MESSAGES__: Message[] | undefined;
+  var __messagesCache: Message[] | undefined;
 }
 
-const SEED_PATH = path.join(process.cwd(), "src", "lib", "messages.json");
-const TMP_PATH = path.join(os.tmpdir(), "zeal_messages.json");
-
 function readMessages(): Message[] {
-  if (globalThis.__ZEAL_MESSAGES__) {
-    return globalThis.__ZEAL_MESSAGES__;
+  if (globalThis.__messagesCache) {
+    return globalThis.__messagesCache;
   }
-
-  // 1. Try reading from writable serverless temp storage
   try {
-    if (fs.existsSync(TMP_PATH)) {
-      const raw = fs.readFileSync(TMP_PATH, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        globalThis.__ZEAL_MESSAGES__ = parsed;
-        return globalThis.__ZEAL_MESSAGES__;
-      }
-    }
-  } catch {}
-
-  // 2. Fall back to repository seed file
-  try {
-    const raw = fs.readFileSync(SEED_PATH, "utf-8");
+    const raw = fs.readFileSync(DB_PATH, "utf-8");
     const parsed = JSON.parse(raw);
-    globalThis.__ZEAL_MESSAGES__ = Array.isArray(parsed) ? parsed : [];
+    const result = Array.isArray(parsed) ? parsed : [];
+    globalThis.__messagesCache = result;
+    return result;
   } catch {
-    globalThis.__ZEAL_MESSAGES__ = [];
+    globalThis.__messagesCache = [];
+    return [];
   }
-  return globalThis.__ZEAL_MESSAGES__ || [];
 }
 
 function writeMessages(messages: Message[]): void {
-  globalThis.__ZEAL_MESSAGES__ = messages;
+  globalThis.__messagesCache = messages;
   try {
-    fs.writeFileSync(TMP_PATH, JSON.stringify(messages, null, 2), "utf-8");
-  } catch {}
-  try {
-    fs.writeFileSync(SEED_PATH, JSON.stringify(messages, null, 2), "utf-8");
-  } catch {}
+    fs.writeFileSync(DB_PATH, JSON.stringify(messages, null, 2), "utf-8");
+  } catch (err) {
+    console.warn("Could not persist messages.json to disk (expected in serverless environments):", err);
+  }
 }
 
 export const messageStore = {
