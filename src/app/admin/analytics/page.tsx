@@ -29,12 +29,29 @@ const pixelConversions = [
 ];
 
 export default function AnalyticsDashboard() {
-  const { allOrders } = useOrderStore();
+  const { allOrders: storeOrders } = useOrderStore();
+  const [orders, setOrders] = useState<any[]>([]);
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    fetch("/api/orders", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data.orders) && data.orders.length > 0) {
+          setOrders(data.orders);
+        } else {
+          setOrders(storeOrders);
+        }
+      })
+      .catch(() => {
+        setOrders(storeOrders);
+      });
+  }, [storeOrders]);
 
   if (!mounted) return null;
+
+  const allOrders = orders;
 
   // ── Computed Metrics ──────────────────────────────────────
   const totalOrders = allOrders.length;
