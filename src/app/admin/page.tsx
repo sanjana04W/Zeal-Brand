@@ -15,36 +15,37 @@ import { useOrderStore } from "@/lib/orderStore";
 
 export default function AdminDashboard() {
   const { allOrders: storeOrders } = useOrderStore();
-  const [liveOrders, setLiveOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    const fetchLiveData = async () => {
+    const fetchOrders = async () => {
       try {
         const res = await fetch("/api/orders", { cache: "no-store" });
         const data = await res.json();
         if (Array.isArray(data.orders)) {
-          setLiveOrders(data.orders);
+          setOrders(data.orders);
+        } else {
+          setOrders(storeOrders);
         }
       } catch {
-        /* fallback to store */
+        setOrders(storeOrders);
       }
     };
 
-    fetchLiveData();
-    const interval = setInterval(fetchLiveData, 10000);
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [storeOrders]);
 
   if (!mounted) return null;
 
-  const allOrders = liveOrders.length > 0 ? liveOrders : storeOrders;
+  const allOrders = orders;
 
-  const totalRevenue = allOrders.reduce((sum, o) => sum + o.total, 0);
+  const totalRevenue = allOrders.reduce((sum, o) => sum + (o.total || 0), 0);
   const totalOrders = allOrders.length;
   const pendingOrdersCount = allOrders.filter((o) => o.status === "PENDING").length;
-
   const recentOrders = allOrders.slice(0, 5);
 
   const lowStockItems = [
