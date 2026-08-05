@@ -39,41 +39,31 @@ const SEED_PATH = path.join(process.cwd(), "src", "lib", "orders.json");
 const TMP_PATH = path.join(os.tmpdir(), "zeal_orders.json");
 
 function readOrders(): OrderRecord[] {
-  if (globalThis.__ZEAL_ORDERS__ && globalThis.__ZEAL_ORDERS__.length > 0) {
+  if (globalThis.__ZEAL_ORDERS__) {
     return globalThis.__ZEAL_ORDERS__;
   }
 
-  let ordersMap = new Map<string, OrderRecord>();
-
-  // 1. Load seed file first
-  try {
-    if (fs.existsSync(SEED_PATH)) {
-      const raw = fs.readFileSync(SEED_PATH, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        parsed.forEach((o) => {
-          if (o.orderId) ordersMap.set(o.orderId, o);
-        });
-      }
-    }
-  } catch {}
-
-  // 2. Overlay writable serverless temp storage
+  // 1. Try reading from writable serverless temp storage
   try {
     if (fs.existsSync(TMP_PATH)) {
       const raw = fs.readFileSync(TMP_PATH, "utf-8");
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        parsed.forEach((o) => {
-          if (o.orderId) ordersMap.set(o.orderId, o);
-        });
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        globalThis.__ZEAL_ORDERS__ = parsed;
+        return globalThis.__ZEAL_ORDERS__;
       }
     }
   } catch {}
 
-  const combined = Array.from(ordersMap.values());
-  globalThis.__ZEAL_ORDERS__ = combined;
-  return globalThis.__ZEAL_ORDERS__;
+  // 2. Fall back to repository seed file
+  try {
+    const raw = fs.readFileSync(SEED_PATH, "utf-8");
+    const parsed = JSON.parse(raw);
+    globalThis.__ZEAL_ORDERS__ = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    globalThis.__ZEAL_ORDERS__ = [];
+  }
+  return globalThis.__ZEAL_ORDERS__ || [];
 }
 
 function writeOrders(orders: OrderRecord[]): void {
