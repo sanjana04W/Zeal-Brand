@@ -11,23 +11,74 @@ import {
   AlertTriangle,
   TrendingUp
 } from "lucide-react";
-import { useOrderStore } from "@/lib/orderStore";
+import { useState, useEffect, useCallback } from "react";
+import {
+  DollarSign,
+  ShoppingBag,
+  Users,
+  Clock,
+  ArrowUpRight,
+  AlertTriangle,
+  TrendingUp,
+  RefreshCw
+} from "lucide-react";
+
+interface OrderItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  size?: string;
+}
+
+interface OrderRecord {
+  orderId: string;
+  userEmail: string;
+  fullName: string;
+  phone: string;
+  district: string;
+  address: string;
+  deliveryDate?: string;
+  notes?: string;
+  items: OrderItem[];
+  subtotal: number;
+  delivery: number;
+  total: number;
+  status: "PENDING" | "CONFIRMED" | "SHIPPED" | "DELIVERED" | "CANCELLED";
+  date: string;
+}
 
 export default function AdminDashboard() {
-  const { allOrders } = useOrderStore();
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+
+  const fetchOrders = useCallback(async () => {
+    try {
+      const res = await fetch("/api/orders", { cache: "no-store" });
+      const data = await res.json();
+      setOrders(data.orders ?? []);
+    } catch (e) {
+      console.error("Failed to fetch orders:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    fetchOrders();
+    const interval = setInterval(() => fetchOrders(), 15000);
+    return () => clearInterval(interval);
+  }, [fetchOrders]);
 
   if (!mounted) return null;
 
-  const totalRevenue = allOrders.reduce((sum, o) => sum + o.total, 0);
-  const totalOrders = allOrders.length;
-  const pendingOrdersCount = allOrders.filter((o) => o.status === "PENDING").length;
+  const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
+  const totalOrders = orders.length;
+  const pendingOrdersCount = orders.filter((o) => o.status === "PENDING").length;
 
-  const recentOrders = allOrders.slice(0, 5);
+  const recentOrders = orders.slice(0, 5);
 
   const lowStockItems = [
     { name: "Oversized 'Acid Wash' Tee", badge: "1 left", badgeColor: "bg-neutral-100 text-neutral-800 border-neutral-300" },
@@ -98,7 +149,7 @@ export default function AdminDashboard() {
               TOTAL CUSTOMERS
             </span>
             <h3 className="text-2xl font-black text-neutral-900 tracking-tight">
-              {new Set(allOrders.map((o) => o.userEmail)).size}
+              {new Set(orders.map((o) => o.userEmail)).size}
             </h3>
             <p className="text-xs font-bold text-emerald-600 flex items-center gap-1 mt-1">
               <TrendingUp size={12} /> Unique ordering customers
