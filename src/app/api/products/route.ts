@@ -2,18 +2,35 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
+import os from 'os';
+
 declare global {
   var __ZEAL_PRODUCTS__: any[] | undefined;
 }
 
-const dataFilePath = path.join(process.cwd(), 'src', 'lib', 'products.json');
+const SEED_PATH = path.join(process.cwd(), 'src', 'lib', 'products.json');
+const TMP_PATH = path.join(os.tmpdir(), 'zeal_products.json');
 
 function getProducts() {
   if (globalThis.__ZEAL_PRODUCTS__) {
     return globalThis.__ZEAL_PRODUCTS__;
   }
+
+  // 1. Try reading from writable serverless temp storage
   try {
-    const fileContents = fs.readFileSync(dataFilePath, 'utf8');
+    if (fs.existsSync(TMP_PATH)) {
+      const raw = fs.readFileSync(TMP_PATH, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        globalThis.__ZEAL_PRODUCTS__ = parsed;
+        return globalThis.__ZEAL_PRODUCTS__;
+      }
+    }
+  } catch {}
+
+  // 2. Fall back to repository seed file
+  try {
+    const fileContents = fs.readFileSync(SEED_PATH, 'utf8');
     globalThis.__ZEAL_PRODUCTS__ = JSON.parse(fileContents);
   } catch {
     globalThis.__ZEAL_PRODUCTS__ = [];
@@ -24,10 +41,11 @@ function getProducts() {
 function saveProducts(products: any[]) {
   globalThis.__ZEAL_PRODUCTS__ = products;
   try {
-    fs.writeFileSync(dataFilePath, JSON.stringify(products, null, 2));
-  } catch (err) {
-    console.warn('Serverless read-only filesystem warning, products stored in server memory:', err);
-  }
+    fs.writeFileSync(TMP_PATH, JSON.stringify(products, null, 2));
+  } catch {}
+  try {
+    fs.writeFileSync(SEED_PATH, JSON.stringify(products, null, 2));
+  } catch {}
 }
 
 // GET /api/products
