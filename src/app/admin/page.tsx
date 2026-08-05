@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   DollarSign,
   ShoppingBag,
@@ -9,62 +9,32 @@ import {
   Clock,
   ArrowUpRight,
   AlertTriangle,
-  TrendingUp,
-  RefreshCw
+  TrendingUp
 } from "lucide-react";
-
-interface OrderItem {
-  id: string;
-  name: string;
-  price: number;
-  quantity: number;
-  size?: string;
-}
-
-interface OrderRecord {
-  orderId: string;
-  userEmail: string;
-  fullName: string;
-  phone: string;
-  district: string;
-  address: string;
-  deliveryDate?: string;
-  notes?: string;
-  items: OrderItem[];
-  subtotal: number;
-  delivery: number;
-  total: number;
-  status: "PENDING" | "CONFIRMED" | "SHIPPED" | "DELIVERED" | "CANCELLED";
-  date: string;
-}
+import { OrderRecord } from "@/lib/orderFileStore";
 
 export default function AdminDashboard() {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [mounted, setMounted] = useState(false);
-
-  const fetchOrders = useCallback(async () => {
-    try {
-      const res = await fetch("/api/orders", { cache: "no-store" });
-      const data = await res.json();
-      setOrders(data.orders ?? []);
-    } catch (e) {
-      console.error("Failed to fetch orders:", e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
-    setMounted(true);
+    async function fetchOrders() {
+      try {
+        const res = await fetch("/api/orders", { cache: "no-store" });
+        const data = await res.json();
+        setOrders(data.orders ?? []);
+      } catch (err) {
+        console.error("Failed to fetch dashboard orders", err);
+      } finally {
+        setLoading(false);
+      }
+    }
     fetchOrders();
-    const interval = setInterval(() => fetchOrders(), 15000);
+    const interval = setInterval(fetchOrders, 15000);
     return () => clearInterval(interval);
-  }, [fetchOrders]);
+  }, []);
 
-  if (!mounted) return null;
-
-  const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
+  const totalRevenue = orders.reduce((sum, o) => sum + (o.status !== "CANCELLED" ? o.total : 0), 0);
   const totalOrders = orders.length;
   const pendingOrdersCount = orders.filter((o) => o.status === "PENDING").length;
 
