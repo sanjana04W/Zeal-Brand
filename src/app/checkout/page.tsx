@@ -208,7 +208,7 @@ export default function Checkout() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const { clearCart, items, getCartTotal } = useCartStore();
   const { isAuthenticated, user } = useAuthStore();
-  const { setLastOrder } = useOrderStore();
+  const { setLastOrder, addOrder } = useOrderStore();
   const { addNotification } = useNotificationStore();
 
   // Verification State
@@ -304,11 +304,14 @@ export default function Checkout() {
     const randomId = Math.floor(Math.random() * 90000) + 10000;
     const orderId = `ZB-${randomId}`;
 
+    const rawEmail = ((fd?.get("email") as string) || user?.email || "").trim().toLowerCase();
+    const rawPhone = ((fd?.get("phone") as string) || user?.phone || "").trim();
+
     const orderRecord = {
       orderId,
-      userEmail: (fd?.get("email") as string) || user?.email || "",
-      fullName: (fd?.get("firstName") as string) || user?.name || "",
-      phone: (fd?.get("phone") as string) || "",
+      userEmail: rawEmail,
+      fullName: (fd?.get("firstName") as string) || user?.name || "Customer",
+      phone: rawPhone,
       district: (fd?.get("district") as string) || "",
       address: (fd?.get("address") as string) || "",
       deliveryDate: (fd?.get("deliveryDate") as string) || "",
@@ -334,11 +337,12 @@ export default function Checkout() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(orderRecord),
       });
-    } catch {
-      // Non-blocking: still proceed even if server save fails
+    } catch (err) {
+      console.warn("Server order save attempt warning:", err);
     }
 
-    // Keep last order in memory for confirmation page
+    // Keep order in client store for instant local sync
+    addOrder(orderRecord);
     setLastOrder(orderRecord);
 
     addNotification({
