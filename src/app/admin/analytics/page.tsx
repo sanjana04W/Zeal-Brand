@@ -9,6 +9,7 @@ import {
   XCircle,
   Package,
 } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useOrderStore } from "@/lib/orderStore";
 
 const STATUS_CONFIG = [
@@ -30,22 +31,55 @@ const pixelConversions = [
 
 export default function AnalyticsDashboard() {
   const [allOrders, setAllOrders] = useState<any[]>([]);
+  const [outOfStockCount, setOutOfStockCount] = useState<number>(0);
   const [mounted, setMounted] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-    async function loadOrders() {
+  const loadData = async (silent = false) => {
+    if (!silent) setRefreshing(true);
+    try {
+      let serverOrders: any[] = [];
       try {
         const res = await fetch("/api/orders", { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
-          setAllOrders(data.orders || []);
+          serverOrders = data.orders || [];
         }
       } catch (err) {
-        console.error("Failed to load analytics orders:", err);
+        console.warn("Failed to load analytics orders from API:", err);
       }
+
+      const clientOrders = useOrderStore.getState().allOrders;
+      const map = new Map<string, any>();
+      for (const o of [...serverOrders, ...clientOrders]) {
+        if (o && o.orderId) {
+          map.set(o.orderId, o);
+        }
+      }
+
+      const merged = Array.from(map.values()).sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+      setAllOrders(merged);
+
+      try {
+        const prodRes = await fetch("/api/products", { cache: "no-store" });
+        if (prodRes.ok) {
+          const prods: any[] = await prodRes.json();
+          const lowStock = prods.filter((p) => !p.inStock || (p.sizeStock && Object.values(p.sizeStock).some((val) => val === false))).length;
+          setOutOfStockCount(lowStock);
+        }
+      } catch { /* ignore */ }
+    } finally {
+      setRefreshing(false);
     }
-    loadOrders();
+  };
+
+  useEffect(() => {
+    setMounted(true);
+    loadData();
+    const interval = setInterval(() => loadData(true), 5000);
+    return () => clearInterval(interval);
   }, []);
 
   if (!mounted) return null;
@@ -85,13 +119,29 @@ export default function AnalyticsDashboard() {
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-black tracking-tight text-neutral-900">
-          Analytics Dashboard
-        </h1>
-        <p className="text-xs font-semibold text-neutral-400 mt-1">
-          Revenue, conversions &amp; business performance
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight text-neutral-900">
+            Analytics Dashboard
+          </h1>
+          <p className="text-xs font-semibold text-neutral-400 mt-1">
+            Revenue, conversions &amp; business performance
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full whitespace-nowrap">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+            Live Sync Active
+          </span>
+          <button
+            onClick={() => loadData()}
+            disabled={refreshing}
+            className="flex items-center gap-2 text-xs font-bold text-neutral-600 hover:text-neutral-900 bg-white border border-neutral-200 px-3.5 py-2 rounded-xl transition-all hover:shadow-sm disabled:opacity-60 cursor-pointer"
+          >
+            <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Metric Cards */}
@@ -171,7 +221,7 @@ export default function AnalyticsDashboard() {
           </div>
         </div>
 
-        {/* Low Stock SKUs — static for now */}
+        {/* Low Stock SKUs — dynamic from product inventory */}
         <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm flex flex-col justify-between min-h-[140px]">
           <div className="w-10 h-10 bg-neutral-100 text-neutral-900 rounded-xl flex items-center justify-center border border-neutral-200">
             <Package size={22} className="stroke-[2.5]" />
@@ -181,7 +231,7 @@ export default function AnalyticsDashboard() {
               LOW STOCK SKUS
             </span>
             <h2 className="text-2xl font-black tracking-tight text-neutral-900">
-              3 Items
+              {outOfStockCount} {outOfStockCount === 1 ? "Item" : "Items"}
             </h2>
           </div>
         </div>
