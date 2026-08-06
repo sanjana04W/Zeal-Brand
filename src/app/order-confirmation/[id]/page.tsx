@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { CheckCircle2, Truck, Phone, MapPin, Calendar, Package, ShoppingBag } from "lucide-react";
-import { use } from "react";
+import { useState, useEffect, use } from "react";
 import { useOrderStore } from "@/lib/orderStore";
 
 export default function OrderConfirmation({ params }: { params: Promise<{ id: string }> }) {
@@ -10,8 +10,24 @@ export default function OrderConfirmation({ params }: { params: Promise<{ id: st
   const orderId = resolvedParams.id;
   const { lastOrder } = useOrderStore();
 
+  const [order, setOrder] = useState<any>(
+    lastOrder?.orderId === orderId ? lastOrder : null
+  );
+
+  useEffect(() => {
+    if (!order || order.orderId !== orderId) {
+      fetch("/api/orders", { cache: "no-store" })
+        .then((res) => res.json())
+        .then((data) => {
+          const found = (data.orders || []).find((o: any) => o.orderId === orderId);
+          if (found) setOrder(found);
+        })
+        .catch((err) => console.error("Failed to load order confirmation:", err));
+    }
+  }, [orderId, order]);
+
   const delivery = 400;
-  const subtotal = lastOrder?.items.reduce((sum, item) => sum + item.price * item.quantity, 0) ?? 0;
+  const subtotal = order?.items?.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0) ?? 0;
   const total = subtotal + delivery;
 
   const ITEM_COLORS = ["#C0392B", "#8E44AD", "#1A5276", "#117A65", "#B7770D", "#784212"];
@@ -53,28 +69,28 @@ export default function OrderConfirmation({ params }: { params: Promise<{ id: st
             <div className="space-y-2.5 text-sm">
               <div>
                 <span className="font-bold text-neutral-900">Recipient Name: </span>
-                <span className="text-neutral-600">{lastOrder?.fullName || "—"}</span>
+                <span className="text-neutral-600">{order?.fullName || "—"}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Phone size={13} className="text-neutral-400 shrink-0" />
                 <span className="font-bold text-neutral-900">Mobile Contact: </span>
-                <span className="text-neutral-600">{lastOrder?.phone || "—"}</span>
+                <span className="text-neutral-600">{order?.phone || "—"}</span>
               </div>
               <div>
                 <span className="font-bold text-neutral-900">District: </span>
-                <span className="text-neutral-600">{lastOrder?.district || "—"}</span>
+                <span className="text-neutral-600">{order?.district || "—"}</span>
               </div>
               <div className="flex items-start gap-1.5">
                 <MapPin size={13} className="text-neutral-400 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold text-neutral-900">Address: </span>
-                  <span className="text-neutral-600">{lastOrder?.address || "—"}</span>
+                  <span className="text-neutral-600">{order?.address || "—"}</span>
                 </div>
               </div>
-              {lastOrder?.deliveryDate && (
+              {order?.deliveryDate && (
                 <div className="flex items-center gap-1.5 text-purple-600 font-semibold">
                   <Calendar size={13} className="shrink-0" />
-                  Requested Delivery: {lastOrder.deliveryDate}
+                  Requested Delivery: {order.deliveryDate}
                 </div>
               )}
             </div>
@@ -94,7 +110,7 @@ export default function OrderConfirmation({ params }: { params: Promise<{ id: st
               <div className="flex items-center gap-2">
                 <span className="font-bold text-neutral-900">Fulfillment Status: </span>
                 <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2.5 py-0.5 rounded-full border border-amber-200">
-                  Pending
+                  {order?.status || "PENDING"}
                 </span>
               </div>
             </div>
@@ -118,8 +134,8 @@ export default function OrderConfirmation({ params }: { params: Promise<{ id: st
 
           {/* Items */}
           <div className="divide-y divide-neutral-100">
-            {lastOrder?.items && lastOrder.items.length > 0 ? (
-              lastOrder.items.map((item, idx) => (
+            {order?.items && order.items.length > 0 ? (
+              order.items.map((item: any, idx: number) => (
                 <div key={`${item.id}-${idx}`} className="flex justify-between items-start py-4">
                   <div>
                     <p className="font-bold text-neutral-900 text-sm">{item.name}</p>
