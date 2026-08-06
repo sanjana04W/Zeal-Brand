@@ -15,6 +15,8 @@ interface Message {
   createdAt: number;
 }
 
+import { useMessageStore } from "@/lib/messageStoreClient";
+
 export default function MessagesManagement() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
@@ -27,18 +29,39 @@ export default function MessagesManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterTab, setFilterTab] = useState<"All" | "Unread" | "Read" | "Replied">("All");
 
+  const { messages: localMessages, updateMessageStatus } = useMessageStore();
+
   const fetchMessages = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
-      const res = await fetch("/api/messages", { cache: "no-store" });
-      const data = await res.json();
-      const fetched: Message[] = data.messages ?? [];
-      setMessages(fetched);
+      let serverMessages: Message[] = [];
+      try {
+        const res = await fetch("/api/messages", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          serverMessages = data.messages ?? [];
+        }
+      } catch (e) {
+        console.warn("Could not reach /api/messages, using persistent local messages store:", e);
+      }
+
+      const clientStoreMessages = useMessageStore.getState().messages;
+
+      // Deduplicate and merge server + client messages
+      const map = new Map<string, Message>();
+      for (const m of [...serverMessages, ...clientStoreMessages]) {
+        if (m && m.id) {
+          map.set(m.id, m as Message);
+        }
+      }
+
+      const merged = Array.from(map.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      setMessages(merged);
       setLastRefreshed(new Date());
       setSelectedMessage((prev) => {
-        if (!prev && fetched.length > 0) return fetched[0];
-        return prev ? fetched.find((m) => m.id === prev.id) ?? prev : null;
+        if (!prev && merged.length > 0) return merged[0];
+        return prev ? merged.find((m) => m.id === prev.id) ?? prev : merged[0] || null;
       });
     } catch (err) {
       console.error("Failed to load messages:", err);
@@ -64,6 +87,7 @@ export default function MessagesManagement() {
     setReplyText("");
     setShowDetail(true);
     if (msg.status === "Unread") {
+      updateMessageStatus(msg.id, "Read");
       await fetch("/api/messages", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -78,6 +102,7 @@ export default function MessagesManagement() {
   const handleSendReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!replyText.trim() || !selectedMessage) return;
+    updateMessageStatus(selectedMessage.id, "Replied");
     await fetch("/api/messages", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

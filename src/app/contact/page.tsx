@@ -4,6 +4,7 @@ import { Mail, MessageCircle, Clock, MapPin, Send, Plus, Minus, CheckCircle2 } f
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNotificationStore } from "@/lib/notificationStore";
+import { useMessageStore } from "@/lib/messageStoreClient";
 
 const FAQS = [
   {
@@ -35,6 +36,7 @@ export default function Contact() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const { addNotification } = useNotificationStore();
+  const { addMessage } = useMessageStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,17 +46,23 @@ export default function Contact() {
     }
     setSending(true);
     setError("");
+
+    const payload = {
+      name: name.trim() || "Customer",
+      email: email.trim(),
+      phone: phone.trim(),
+      subject: subject.trim() || `Inquiry from ${name || "Customer"}`,
+      message: message.trim(),
+    };
+
+    // Save to client store immediately so it is never lost
+    addMessage(payload);
+
     try {
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim() || "Customer",
-          email: email.trim(),
-          phone: phone.trim(),
-          subject: subject.trim() || `Inquiry from ${name || "Customer"}`,
-          message: message.trim(),
-        }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         addNotification({

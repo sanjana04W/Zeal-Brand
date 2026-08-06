@@ -72,20 +72,9 @@ export const messageStore = {
       name: (msg.name || "Customer").trim(),
       email: (msg.email || "").trim().toLowerCase(),
       phone: (msg.phone || "").trim(),
-      subject: (msg.subject || "").trim(),
+      subject: (msg.subject || "Customer Inquiry").trim(),
       message: (msg.message || "").trim(),
     };
-
-    // Rapid deduplication (same email/name & message within 5 seconds)
-    const existing = messages.find(
-      (m) =>
-        m.email === cleanMsg.email &&
-        m.message === cleanMsg.message &&
-        Math.abs(Date.now() - m.createdAt) < 5000
-    );
-    if (existing) {
-      return existing;
-    }
 
     const newMsg: Message = {
       ...cleanMsg,
