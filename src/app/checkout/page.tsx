@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCartStore } from "@/lib/store";
 import { useAuthStore } from "@/lib/authStore";
-import { useOrderStore } from "@/lib/orderStore";
+import { useOrderStore, OrderRecord } from "@/lib/orderStore";
 import { useNotificationStore } from "@/lib/notificationStore";
 import emailjs from "@emailjs/browser";
 
@@ -228,13 +228,82 @@ export default function Checkout() {
   const delivery = 400;
   const total = subtotal + delivery;
 
+  const executeOrderPlacement = async (fd: FormData | null) => {
+    setIsSubmitting(true);
+    const delivery = 400;
+    const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+    const randomId = Math.floor(Math.random() * 90000) + 10000;
+    const orderId = `ZB-${randomId}`;
+
+    const emailFromForm = (fd?.get("email") as string) || "";
+    const phoneFromForm = (fd?.get("phone") as string) || "";
+    const nameFromForm = (fd?.get("firstName") as string) || "";
+
+    const rawEmail = (emailFromForm || user?.email || "customer@zealbrand.com").trim().toLowerCase();
+    const rawPhone = (phoneFromForm || user?.phone || "").trim();
+    const rawName = (nameFromForm || user?.name || "Customer").trim();
+
+    const orderRecord: OrderRecord = {
+      orderId,
+      userEmail: rawEmail,
+      fullName: rawName,
+      phone: rawPhone,
+      district: (fd?.get("district") as string) || "Colombo",
+      address: (fd?.get("address") as string) || "",
+      deliveryDate: (fd?.get("deliveryDate") as string) || "",
+      notes: (fd?.get("notes") as string) || "",
+      items: items.map((i) => ({
+        id: i.id,
+        name: i.name,
+        price: i.price,
+        quantity: i.quantity,
+        size: i.size,
+      })),
+      subtotal,
+      delivery,
+      total: subtotal + delivery,
+      status: "PENDING" as const,
+      date: new Date().toISOString(),
+    };
+
+    // 1. Save to local client store immediately for 100% instant sync
+    addOrder(orderRecord);
+    setLastOrder(orderRecord);
+
+    // 2. Persist order to server API (survives restarts & re-logins)
+    try {
+      await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(orderRecord),
+      });
+    } catch (err) {
+      console.warn("Server order save attempt warning:", err);
+    }
+
+    // 3. Add admin notification
+    addNotification({
+      type: "ORDER",
+      title: "New Order Placed",
+      subtitle: orderId,
+      detail: `${orderRecord.fullName} placed an order for Rs. ${orderRecord.total.toLocaleString()}`,
+      link: "/admin/orders",
+    });
+
+    clearCart();
+    setIsVerifyingEmail(false);
+    setIsSubmitting(false);
+    router.push(`/order-confirmation/${orderId}`);
+  };
+
   const sendVerificationEmail = async (formData: FormData) => {
     setCapturedFormData(formData);
     const emailFromForm = formData.get("email") as string;
-    const finalEmail = emailFromForm || user?.email;
+    const finalEmail = emailFromForm || user?.email || "";
 
     if (!finalEmail) {
-      alert("Please provide an email address for order verification.");
+      // If no email, proceed directly with order placement
+      await executeOrderPlacement(formData);
       return;
     }
 
@@ -261,8 +330,9 @@ export default function Checkout() {
       setIsVerifyingEmail(true);
       setVerificationError("");
     } catch (error) {
-      console.error("Failed to send verification email:", error);
-      alert("Failed to send verification code. Please check your EmailJS configuration.");
+      console.warn("EmailJS verification failed or skipped, proceeding directly with order placement:", error);
+      // Fallback: If EmailJS fails, do NOT lose the order — place it directly!
+      await executeOrderPlacement(formData);
     } finally {
       setIsSendingCode(false);
     }
@@ -284,7 +354,7 @@ export default function Checkout() {
 
   const handleModalClose = async () => {
     setShowAuthModal(false);
-    // After login, send code with pending form data
+    // After login, send code or place order with pending form data
     if (pendingFormData) {
       await sendVerificationEmail(pendingFormData);
       setPendingFormData(null);
@@ -296,64 +366,7 @@ export default function Checkout() {
       setVerificationError("Invalid verification code. Please try again.");
       return;
     }
-
-    setIsSubmitting(true);
-    const fd = capturedFormData;
-    const delivery = 400;
-    const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
-    const randomId = Math.floor(Math.random() * 90000) + 10000;
-    const orderId = `ZB-${randomId}`;
-
-    const rawEmail = ((fd?.get("email") as string) || user?.email || "").trim().toLowerCase();
-    const rawPhone = ((fd?.get("phone") as string) || user?.phone || "").trim();
-
-    const orderRecord = {
-      orderId,
-      userEmail: rawEmail,
-      fullName: (fd?.get("firstName") as string) || user?.name || "Customer",
-      phone: rawPhone,
-      district: (fd?.get("district") as string) || "",
-      address: (fd?.get("address") as string) || "",
-      deliveryDate: (fd?.get("deliveryDate") as string) || "",
-      notes: (fd?.get("notes") as string) || "",
-      items: items.map((i) => ({
-        id: i.id,
-        name: i.name,
-        price: i.price,
-        quantity: i.quantity,
-        size: i.size,
-      })),
-      subtotal,
-      delivery,
-      total: subtotal + delivery,
-      status: "PENDING" as const,
-      date: new Date().toISOString(),
-    };
-
-    try {
-      // Persist order to server (survives restarts & re-logins)
-      await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(orderRecord),
-      });
-    } catch (err) {
-      console.warn("Server order save attempt warning:", err);
-    }
-
-    // Keep order in client store for instant local sync
-    addOrder(orderRecord);
-    setLastOrder(orderRecord);
-
-    addNotification({
-      type: "ORDER",
-      title: "New Order Placed",
-      subtitle: orderId,
-      detail: `${orderRecord.fullName || "Customer"} placed an order for Rs. ${orderRecord.total.toLocaleString()}`,
-      link: "/admin/orders",
-    });
-    clearCart();
-    router.push(`/order-confirmation/${orderId}`);
+    await executeOrderPlacement(capturedFormData);
   };
 
   return (
@@ -622,13 +635,21 @@ export default function Checkout() {
                     <p className="text-red-600 text-sm font-bold mt-3">{verificationError}</p>
                   )}
 
-                  <div className="mt-4">
+                  <div className="mt-4 flex items-center justify-between gap-4 flex-wrap">
                     <button
                       type="button"
                       onClick={() => setIsVerifyingEmail(false)}
-                      className="text-xs font-semibold text-neutral-400 hover:text-neutral-900 underline underline-offset-2 transition-colors"
+                      className="text-xs font-semibold text-neutral-400 hover:text-neutral-900 underline underline-offset-2 transition-colors cursor-pointer"
                     >
                       Change Email or Details
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => executeOrderPlacement(capturedFormData)}
+                      className="text-xs font-bold text-neutral-900 hover:underline underline-offset-2 transition-colors cursor-pointer"
+                    >
+                      Didn't get code? Complete Order
                     </button>
                   </div>
                 </div>
