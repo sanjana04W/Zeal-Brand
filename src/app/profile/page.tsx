@@ -57,14 +57,33 @@ export default function ProfilePage() {
       setName(user.name || "");
       setPhone(user.phone || "");
       setAddress(user.address || "No 123, Main Street, Colombo 05");
-      // Fetch all orders from server and filter by this user's email
-      fetch("/api/orders", { cache: "no-store" })
-        .then((r) => r.json())
-        .then((data) => {
-          const all = data.orders ?? [];
-          setUserOrders(all.filter((o: {userEmail: string}) => o.userEmail === user.email));
-        })
-        .catch(() => {});
+
+      const userEmailClean = (user.email || "").trim().toLowerCase();
+      const userPhoneClean = (user.phone || "").trim().replace(/\D/g, "");
+
+      const loadUserOrders = async () => {
+        try {
+          const res = await fetch("/api/orders", { cache: "no-store" });
+          if (res.ok) {
+            const data = await res.json();
+            const all: any[] = data.orders ?? [];
+            const matched = all.filter((o) => {
+              const orderEmail = (o.userEmail || "").trim().toLowerCase();
+              const orderPhone = (o.phone || "").trim().replace(/\D/g, "");
+              const emailMatch = Boolean(userEmailClean && orderEmail === userEmailClean);
+              const phoneMatch = Boolean(userPhoneClean && orderPhone && orderPhone === userPhoneClean);
+              return emailMatch || phoneMatch;
+            });
+            setUserOrders(matched);
+          }
+        } catch (err) {
+          console.error("Failed to fetch user orders:", err);
+        }
+      };
+
+      loadUserOrders();
+      const interval = setInterval(loadUserOrders, 10000);
+      return () => clearInterval(interval);
     }
   }, [user]);
 
