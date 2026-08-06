@@ -23,13 +23,12 @@ import {
   ShoppingBag,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/authStore";
-
-
+import { useOrderStore, OrderRecord } from "@/lib/orderStore";
 
 export default function ProfilePage() {
   const router = useRouter();
   const { user, isAuthenticated, logout, updateUser } = useAuthStore();
-  const [userOrders, setUserOrders] = useState<{orderId:string;date:string;status:string;items:{id:string;name:string;price:number;quantity:number;size?:string}[];total:number;subtotal:number;delivery:number}[]>([]);
+  const [userOrders, setUserOrders] = useState<OrderRecord[]>([]);
   const [mounted, setMounted] = useState(false);
 
   // Active tab state: "overview" | "orders" | "settings"
@@ -63,19 +62,33 @@ export default function ProfilePage() {
 
       const loadUserOrders = async () => {
         try {
-          const res = await fetch("/api/orders", { cache: "no-store" });
-          if (res.ok) {
-            const data = await res.json();
-            const all: any[] = data.orders ?? [];
-            const matched = all.filter((o) => {
-              const orderEmail = (o.userEmail || "").trim().toLowerCase();
-              const orderPhone = (o.phone || "").trim().replace(/\D/g, "");
-              const emailMatch = Boolean(userEmailClean && orderEmail === userEmailClean);
-              const phoneMatch = Boolean(userPhoneClean && orderPhone && orderPhone === userPhoneClean);
-              return emailMatch || phoneMatch;
-            });
-            setUserOrders(matched);
+          let serverOrders: any[] = [];
+          try {
+            const res = await fetch("/api/orders", { cache: "no-store" });
+            if (res.ok) {
+              const data = await res.json();
+              serverOrders = data.orders ?? [];
+            }
+          } catch (err) {
+            console.warn("Could not fetch /api/orders:", err);
           }
+
+          const clientOrders = useOrderStore.getState().allOrders;
+          const map = new Map<string, any>();
+          for (const o of [...serverOrders, ...clientOrders]) {
+            if (o && o.orderId) {
+              map.set(o.orderId, o);
+            }
+          }
+          const allMerged = Array.from(map.values());
+          const matched = allMerged.filter((o) => {
+            const orderEmail = (o.userEmail || "").trim().toLowerCase();
+            const orderPhone = (o.phone || "").trim().replace(/\D/g, "");
+            const emailMatch = Boolean(userEmailClean && orderEmail === userEmailClean);
+            const phoneMatch = Boolean(userPhoneClean && orderPhone && orderPhone === userPhoneClean);
+            return emailMatch || phoneMatch;
+          });
+          setUserOrders(matched);
         } catch (err) {
           console.error("Failed to fetch user orders:", err);
         }

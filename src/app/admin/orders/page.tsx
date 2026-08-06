@@ -38,6 +38,8 @@ const STATUS_STYLES: Record<string, string> = {
   CANCELLED: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
+import { useOrderStore } from "@/lib/orderStore";
+
 export default function OrdersManagement() {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,9 +49,29 @@ export default function OrdersManagement() {
 
   const fetchOrders = useCallback(async () => {
     try {
-      const res = await fetch("/api/orders", { cache: "no-store" });
-      const data = await res.json();
-      setOrders(data.orders ?? []);
+      let serverOrders: OrderRecord[] = [];
+      try {
+        const res = await fetch("/api/orders", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          serverOrders = data.orders ?? [];
+        }
+      } catch (e) {
+        console.warn("Could not reach /api/orders, using persistent order store:", e);
+      }
+
+      const clientOrders = useOrderStore.getState().allOrders;
+      const map = new Map<string, OrderRecord>();
+      for (const o of [...serverOrders, ...clientOrders]) {
+        if (o && o.orderId) {
+          map.set(o.orderId, o as OrderRecord);
+        }
+      }
+
+      const merged = Array.from(map.values()).sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+      setOrders(merged);
     } finally {
       setLoading(false);
     }
@@ -57,14 +79,17 @@ export default function OrdersManagement() {
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
-  // Auto-refresh every 15 seconds
+  // Auto-refresh every 10 seconds
   useEffect(() => {
-    const interval = setInterval(() => fetchOrders(), 15000);
+    const interval = setInterval(() => fetchOrders(), 10000);
     return () => clearInterval(interval);
   }, [fetchOrders]);
 
   const handleStatusChange = async (orderId: string, status: string) => {
-    // Optimistic update
+    // Update local client store
+    useOrderStore.getState().updateOrderStatus(orderId, status as OrderRecord["status"]);
+
+    // Optimistic UI update
     setOrders((prev) =>
       prev.map((o) => (o.orderId === orderId ? { ...o, status: status as OrderRecord["status"] } : o))
     );
