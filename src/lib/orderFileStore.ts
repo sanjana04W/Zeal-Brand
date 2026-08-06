@@ -69,15 +69,21 @@ export const orderFileStore = {
 
   add(order: OrderRecord): OrderRecord {
     const orders = readOrders();
+    const normalizedOrder: OrderRecord = {
+      ...order,
+      userEmail: (order.userEmail || "").trim().toLowerCase(),
+      phone: (order.phone || "").trim(),
+    };
+
     // Check if order already exists to prevent duplicate submission
-    const existingIdx = orders.findIndex((o) => o.orderId === order.orderId);
+    const existingIdx = orders.findIndex((o) => o.orderId === normalizedOrder.orderId);
     if (existingIdx !== -1) {
-      orders[existingIdx] = order;
+      orders[existingIdx] = normalizedOrder;
     } else {
-      orders.unshift(order);
+      orders.unshift(normalizedOrder);
     }
     writeOrders(orders);
-    return order;
+    return normalizedOrder;
   },
 
   updateStatus(orderId: string, status: OrderRecord["status"]): boolean {
