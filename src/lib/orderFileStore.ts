@@ -36,19 +36,33 @@ declare global {
 }
 
 function readOrders(): OrderRecord[] {
-  if (globalThis.__ordersCache) {
-    return globalThis.__ordersCache;
-  }
+  let disk: OrderRecord[] = [];
   try {
-    const raw = fs.readFileSync(DB_PATH, "utf-8");
-    const parsed = JSON.parse(raw);
-    const result = Array.isArray(parsed) ? parsed : [];
-    globalThis.__ordersCache = result;
-    return result;
+    if (fs.existsSync(DB_PATH)) {
+      const raw = fs.readFileSync(DB_PATH, "utf-8");
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        disk = parsed;
+      }
+    }
   } catch {
-    globalThis.__ordersCache = [];
-    return [];
+    /* ignore read errors */
   }
+
+  const cache = globalThis.__ordersCache || [];
+  const map = new Map<string, OrderRecord>();
+
+  for (const item of [...disk, ...cache]) {
+    if (item && item.orderId) {
+      map.set(item.orderId, item);
+    }
+  }
+
+  const merged = Array.from(map.values()).sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+  globalThis.__ordersCache = merged;
+  return merged;
 }
 
 function writeOrders(orders: OrderRecord[]): void {

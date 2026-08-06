@@ -23,19 +23,31 @@ declare global {
 }
 
 function readMessages(): Message[] {
-  if (globalThis.__messagesCache) {
-    return globalThis.__messagesCache;
-  }
+  let disk: Message[] = [];
   try {
-    const raw = fs.readFileSync(DB_PATH, "utf-8");
-    const parsed = JSON.parse(raw);
-    const result = Array.isArray(parsed) ? parsed : [];
-    globalThis.__messagesCache = result;
-    return result;
+    if (fs.existsSync(DB_PATH)) {
+      const raw = fs.readFileSync(DB_PATH, "utf-8");
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        disk = parsed;
+      }
+    }
   } catch {
-    globalThis.__messagesCache = [];
-    return [];
+    /* ignore read errors */
   }
+
+  const cache = globalThis.__messagesCache || [];
+  const map = new Map<string, Message>();
+
+  for (const item of [...disk, ...cache]) {
+    if (item && item.id) {
+      map.set(item.id, item);
+    }
+  }
+
+  const merged = Array.from(map.values()).sort((a, b) => b.createdAt - a.createdAt);
+  globalThis.__messagesCache = merged;
+  return merged;
 }
 
 function writeMessages(messages: Message[]): void {

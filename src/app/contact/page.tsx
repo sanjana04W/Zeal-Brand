@@ -28,6 +28,8 @@ export default function Contact() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -36,26 +38,37 @@ export default function Contact() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !message) return;
+    if (!message.trim() || (!email.trim() && !phone.trim())) {
+      setError("Please provide a message and your email or phone number.");
+      return;
+    }
     setSending(true);
     setError("");
     try {
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, message, subject: `Message from ${name}` }),
+        body: JSON.stringify({
+          name: name.trim() || "Customer",
+          email: email.trim(),
+          phone: phone.trim(),
+          subject: subject.trim() || `Inquiry from ${name || "Customer"}`,
+          message: message.trim(),
+        }),
       });
       if (res.ok) {
         addNotification({
           type: "MESSAGE",
           title: "New Contact Message",
-          subtitle: name,
-          detail: `${email}: "${message.slice(0, 45)}${message.length > 45 ? "..." : ""}"`,
+          subtitle: name || "Customer",
+          detail: `${email || phone}: "${message.slice(0, 45)}${message.length > 45 ? "..." : ""}"`,
           link: "/admin/messages",
         });
         setSent(true);
         setName("");
         setEmail("");
+        setPhone("");
+        setSubject("");
         setMessage("");
         setTimeout(() => setSent(false), 6000);
       } else {
@@ -233,15 +246,40 @@ export default function Contact() {
                     />
                   </div>
                   
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label htmlFor="email" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Email Address *</label>
+                      <input 
+                        type="email" 
+                        id="email" 
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="john@example.com"
+                        className="w-full px-5 py-4 rounded-xl border border-border bg-neutral-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all" 
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="phone" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Phone Number (Optional)</label>
+                      <input 
+                        type="tel" 
+                        id="phone" 
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="077 123 4567"
+                        className="w-full px-5 py-4 rounded-xl border border-border bg-neutral-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all" 
+                      />
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
-                    <label htmlFor="email" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Email Address *</label>
+                    <label htmlFor="subject" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Subject / Topic (Optional)</label>
                     <input 
-                      required 
-                      type="email" 
-                      id="email" 
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="john@example.com"
+                      type="text" 
+                      id="subject" 
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      placeholder="Order Inquiry / Size Guidance / General Question"
                       className="w-full px-5 py-4 rounded-xl border border-border bg-neutral-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all" 
                     />
                   </div>
