@@ -48,7 +48,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, price, mainCategory, subCategory, styleCategory, inStock, image, badge } = body;
+    const { name, price, mainCategory, subCategory, styleCategory, inStock, sizeStock, image, badge } = body;
 
     if (!name || price === undefined || !mainCategory) {
       return NextResponse.json({ error: 'Name, price, and main category are required' }, { status: 400 });
@@ -56,6 +56,10 @@ export async function POST(request: Request) {
 
     const products = getProducts();
     const newId = String(Date.now());
+
+    const defaultSizeStock = { S: true, M: true, L: true, XL: true, XXL: true };
+    const finalSizeStock = sizeStock && typeof sizeStock === 'object' ? { ...defaultSizeStock, ...sizeStock } : defaultSizeStock;
+    const computedInStock = inStock !== undefined ? Boolean(inStock) : Object.values(finalSizeStock).some(Boolean);
 
     const newProduct = {
       id: newId,
@@ -67,7 +71,8 @@ export async function POST(request: Request) {
       subCategory: subCategory || 'Basic T-Shirts',
       styleCategory: styleCategory || 'Graphic T-Shirts',
       badge: badge || null,
-      inStock: inStock !== undefined ? Boolean(inStock) : true,
+      inStock: computedInStock,
+      sizeStock: finalSizeStock,
     };
 
     products.unshift(newProduct);
@@ -84,7 +89,7 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const { id, name, price, category, mainCategory, subCategory, styleCategory, inStock } = body;
+    const { id, name, price, category, mainCategory, subCategory, styleCategory, inStock, sizeStock } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });
@@ -97,6 +102,10 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Product not found' }, { status: 404 });
     }
 
+    const existingSizeStock = products[productIndex].sizeStock || { S: true, M: true, L: true, XL: true, XXL: true };
+    const updatedSizeStock = sizeStock && typeof sizeStock === 'object' ? { ...existingSizeStock, ...sizeStock } : existingSizeStock;
+    const computedInStock = inStock !== undefined ? Boolean(inStock) : Object.values(updatedSizeStock).some(Boolean);
+
     // Update the product
     products[productIndex] = {
       ...products[productIndex],
@@ -106,7 +115,8 @@ export async function PUT(request: Request) {
       ...(mainCategory !== undefined && { mainCategory }),
       ...(subCategory !== undefined && { subCategory }),
       ...(styleCategory !== undefined && { styleCategory }),
-      ...(inStock !== undefined && { inStock: Boolean(inStock) })
+      inStock: computedInStock,
+      sizeStock: updatedSizeStock,
     };
 
     // Recalculate original price if there's a discount badge

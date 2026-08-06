@@ -22,8 +22,15 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
       try {
         const res = await fetch("/api/products");
         const products = await res.json();
-        const found = products.find((p: any) => p.id === resolvedParams.id);
-        setProduct(found || null);
+        const found = products.find((p: any) => String(p.id) === String(resolvedParams.id));
+        if (found) {
+          setProduct(found);
+          const sizeStock = found.sizeStock || { S: true, M: true, L: true, XL: true, XXL: true };
+          const firstAvailable = SIZES.find((s) => sizeStock[s] !== false) || "L";
+          setSelectedSize(firstAvailable);
+        } else {
+          setProduct(null);
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -33,8 +40,12 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
     fetchProduct();
   }, [resolvedParams.id]);
 
+  const sizeStock = product?.sizeStock || { S: true, M: true, L: true, XL: true, XXL: true };
+  const isSelectedSizeAvailable = Boolean(product?.inStock !== false && sizeStock[selectedSize] !== false);
+  const isAnySizeAvailable = Boolean(product?.inStock !== false && SIZES.some((s) => sizeStock[s] !== false));
+
   const handleAddToCart = () => {
-    if (!product) return;
+    if (!product || !isSelectedSizeAvailable) return;
     addItem({
       id: product.id,
       name: product.name,
@@ -128,19 +139,52 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
               <button className="text-xs underline underline-offset-4 text-muted-foreground hover:text-foreground">Size Guide</button>
             </div>
             <div className="grid grid-cols-5 gap-2">
-              {SIZES.map(size => (
-                <button 
-                  key={size}
-                  onClick={() => setSelectedSize(size)}
-                  className={`py-2.5 rounded-md text-sm font-bold transition-all border ${
-                    selectedSize === size 
-                      ? 'bg-foreground text-background border-foreground shadow-md' 
-                      : 'bg-background text-foreground border-border hover:border-foreground'
-                  }`}
-                >
-                  {size}
-                </button>
-              ))}
+              {SIZES.map((size) => {
+                const isAvailable = Boolean(product.inStock !== false && sizeStock[size] !== false);
+                const isSelected = selectedSize === size;
+
+                return (
+                  <button 
+                    key={size}
+                    disabled={!isAvailable}
+                    onClick={() => setSelectedSize(size)}
+                    className={`relative py-3 rounded-xl text-sm font-bold transition-all border flex flex-col items-center justify-center ${
+                      !isAvailable
+                        ? 'bg-neutral-100 text-neutral-400 border-neutral-200 cursor-not-allowed opacity-60'
+                        : isSelected 
+                        ? 'bg-neutral-900 text-white border-neutral-900 shadow-md ring-2 ring-neutral-900 ring-offset-1' 
+                        : 'bg-white text-neutral-900 border-neutral-200 hover:border-neutral-900 hover:bg-neutral-50'
+                    }`}
+                  >
+                    <span className={!isAvailable ? "line-through text-neutral-400" : ""}>{size}</span>
+                    {!isAvailable && (
+                      <span className="text-[8px] font-black uppercase text-red-500 tracking-tighter mt-0.5 whitespace-nowrap">
+                        Out of Stock
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Size Stock Guidance Notice */}
+            <div className="mt-3 text-xs font-semibold">
+              {!isAnySizeAvailable ? (
+                <p className="text-red-600 bg-red-50 border border-red-200 px-3 py-2.5 rounded-xl flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-red-600 inline-block" />
+                  All sizes are temporarily out of stock for this product.
+                </p>
+              ) : !isSelectedSizeAvailable ? (
+                <p className="text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2.5 rounded-xl flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 inline-block animate-pulse" />
+                  Size {selectedSize} is Temporarily Out of Stock. Please choose another available size.
+                </p>
+              ) : (
+                <p className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2.5 rounded-xl flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                  Size {selectedSize} is In Stock — Ready for Islandwide Dispatch
+                </p>
+              )}
             </div>
           </div>
 
@@ -150,28 +194,33 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
               <button 
                 onClick={() => setQuantity(Math.max(1, quantity - 1))}
                 className="text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
-                disabled={quantity <= 1}
+                disabled={quantity <= 1 || !isSelectedSizeAvailable}
               >
                 <Minus size={14} />
               </button>
               <span className="font-bold text-sm sm:text-base">{quantity}</span>
               <button 
                 onClick={() => setQuantity(quantity + 1)}
-                className="text-muted-foreground hover:text-foreground transition-colors"
+                className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                disabled={!isSelectedSizeAvailable}
               >
                 <Plus size={14} />
               </button>
             </div>
             <button 
               onClick={handleAddToCart}
-              disabled={!product.inStock}
-              className={`flex-1 uppercase tracking-wider font-black py-3 px-3 sm:px-6 text-xs sm:text-sm rounded-md transition-all active:scale-[0.98] truncate ${
-                product.inStock 
-                  ? 'bg-foreground text-background hover:bg-neutral-800 shadow-xl' 
-                  : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+              disabled={!isSelectedSizeAvailable}
+              className={`flex-1 uppercase tracking-wider font-black py-3.5 px-3 sm:px-6 text-xs sm:text-sm rounded-xl transition-all active:scale-[0.98] truncate ${
+                isSelectedSizeAvailable 
+                  ? 'bg-neutral-900 text-white hover:bg-black shadow-xl cursor-pointer' 
+                  : 'bg-neutral-200 text-neutral-400 cursor-not-allowed border border-neutral-300'
               }`}
             >
-              {product.inStock ? `Add to Cart — Rs. ${(product.price * quantity).toLocaleString()}` : 'Out of Stock'}
+              {isSelectedSizeAvailable
+                ? `Add to Cart — Rs. ${(product.price * quantity).toLocaleString()}`
+                : !isAnySizeAvailable
+                ? "All Sizes Out of Stock"
+                : `Size ${selectedSize} Temporarily Out of Stock`}
             </button>
           </div>
 

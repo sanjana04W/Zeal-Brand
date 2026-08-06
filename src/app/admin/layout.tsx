@@ -53,20 +53,33 @@ export default function AdminLayout({
   const { notifications, dismissNotification, dismissAll } = useNotificationStore();
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const unreadCount = notifications.length;
   const [pendingOrderCount, setPendingOrderCount] = useState(0);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
-  // Fetch live pending order count
+  const unreadCount = notifications.length + unreadMessageCount;
+
+  // Fetch live counts for pending orders and unread messages
   useEffect(() => {
-    const fetchPending = async () => {
+    const fetchCounts = async () => {
       try {
-        const res = await fetch("/api/orders", { cache: "no-store" });
-        const data = await res.json();
-        setPendingOrderCount(data.pendingCount ?? 0);
+        const [ordersRes, msgsRes] = await Promise.all([
+          fetch("/api/orders", { cache: "no-store" }),
+          fetch("/api/messages", { cache: "no-store" }),
+        ]);
+
+        if (ordersRes.ok) {
+          const ordersData = await ordersRes.json();
+          setPendingOrderCount(ordersData.pendingCount ?? 0);
+        }
+
+        if (msgsRes.ok) {
+          const msgsData = await msgsRes.json();
+          setUnreadMessageCount(msgsData.unreadCount ?? 0);
+        }
       } catch { /* ignore */ }
     };
-    fetchPending();
-    const interval = setInterval(fetchPending, 15000);
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -118,7 +131,7 @@ export default function AdminLayout({
     { name: "Promotions & Offers", href: "/admin/promotions", icon: Tags, staffAccess: false },
     { name: "Analytics", href: "/admin/analytics", icon: BarChart3, staffAccess: false },
     { name: "User Management", href: "/admin/users", icon: Users, staffAccess: false },
-    { name: "Messages", href: "/admin/messages", icon: MessageSquare, badge: unreadCount > 0 ? unreadCount : undefined, badgeColor: "bg-red-600 text-white", staffAccess: true },
+    { name: "Messages", href: "/admin/messages", icon: MessageSquare, badge: unreadMessageCount > 0 ? unreadMessageCount : undefined, badgeColor: "bg-red-600 text-white", staffAccess: true },
     { name: "System Settings", href: "/admin/settings", icon: Settings, staffAccess: false },
   ];
 

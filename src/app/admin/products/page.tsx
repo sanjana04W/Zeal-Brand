@@ -51,6 +51,7 @@ export default function ProductsManagement() {
     subCategory: "Basic T-Shirts",
     styleCategory: "Graphic T-Shirts",
     inStock: true,
+    sizeStock: { S: true, M: true, L: true, XL: true, XXL: true } as Record<string, boolean>,
     image: "",
   });
   const [isAdding, setIsAdding] = useState(false);
@@ -83,6 +84,7 @@ export default function ProductsManagement() {
     setEditingProduct({
       ...product,
       inStock: product.inStock !== undefined ? product.inStock : true,
+      sizeStock: product.sizeStock || { S: true, M: true, L: true, XL: true, XXL: true },
       subCategory: product.subCategory || "Basic T-Shirts",
       styleCategory: product.styleCategory || "Graphic T-Shirts",
     });
@@ -108,6 +110,7 @@ export default function ProductsManagement() {
           styleCategory: editingProduct.styleCategory,
           category: editingProduct.subCategory || editingProduct.mainCategory,
           inStock: Boolean(editingProduct.inStock),
+          sizeStock: editingProduct.sizeStock || { S: true, M: true, L: true, XL: true, XXL: true },
         }),
       });
 
@@ -143,6 +146,7 @@ export default function ProductsManagement() {
           subCategory: newProduct.subCategory,
           styleCategory: newProduct.styleCategory,
           inStock: newProduct.inStock,
+          sizeStock: newProduct.sizeStock || { S: true, M: true, L: true, XL: true, XXL: true },
           image: newProduct.image || "/Images/tshirts/bow1.jpg",
         }),
       });
@@ -160,6 +164,7 @@ export default function ProductsManagement() {
             subCategory: "Basic T-Shirts",
             styleCategory: "Graphic T-Shirts",
             inStock: true,
+            sizeStock: { S: true, M: true, L: true, XL: true, XXL: true },
             image: "",
           });
         }, 1200);
@@ -242,6 +247,7 @@ export default function ProductsManagement() {
                   <th className="px-6 py-4">STYLE</th>
                   <th className="px-6 py-4">PRICE</th>
                   <th className="px-6 py-4">STOCK</th>
+                  <th className="px-6 py-4">SIZE STOCK</th>
                   <th className="px-6 py-4">STATUS</th>
                   <th className="px-6 py-4 text-right">ACTIONS</th>
                 </tr>
@@ -277,6 +283,25 @@ export default function ProductsManagement() {
                       <span className={`font-extrabold ${!product.inStock ? "text-red-600" : "text-neutral-700"}`}>
                         {product.inStock ? "In Stock" : "Out of Stock"}
                       </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap gap-1 max-w-[140px]">
+                        {["S", "M", "L", "XL", "XXL"].map((sz) => {
+                          const isAvail = product.sizeStock ? product.sizeStock[sz] !== false : product.inStock !== false;
+                          return (
+                            <span
+                              key={sz}
+                              className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${
+                                isAvail
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : "bg-red-50 text-red-600 border-red-200 line-through opacity-70"
+                              }`}
+                            >
+                              {sz}
+                            </span>
+                          );
+                        })}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <span
@@ -461,6 +486,44 @@ export default function ProductsManagement() {
                 </div>
               </div>
 
+              {/* Size-Specific Stock Management */}
+              <div>
+                <label className="block text-[10px] font-extrabold uppercase tracking-widest text-neutral-400 mb-1.5">
+                  Size Availability (Click to toggle)
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {["S", "M", "L", "XL", "XXL"].map((sz) => {
+                    const currentStock = editingProduct.sizeStock || { S: true, M: true, L: true, XL: true, XXL: true };
+                    const isAvail = currentStock[sz] !== false;
+                    return (
+                      <button
+                        key={sz}
+                        type="button"
+                        onClick={() => {
+                          const updated = { ...currentStock, [sz]: !isAvail };
+                          setEditingProduct({
+                            ...editingProduct,
+                            sizeStock: updated,
+                            inStock: Object.values(updated).some(Boolean),
+                          });
+                        }}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${
+                          isAvail
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                            : "bg-red-50 text-red-600 border-red-200 line-through opacity-70 hover:bg-red-100"
+                        }`}
+                      >
+                        <span>Size {sz}</span>
+                        <span className={`w-2 h-2 rounded-full ${isAvail ? "bg-emerald-500" : "bg-red-500"}`} />
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-neutral-400 mt-1">
+                  Green = In Stock & Purchasable. Red Line-through = Temporarily Out of Stock.
+                </p>
+              </div>
+
               {/* Action Buttons */}
               <div className="pt-4 flex justify-end gap-3 border-t border-neutral-100 mt-6">
                 <button
@@ -632,6 +695,44 @@ export default function ProductsManagement() {
                     <option value="false">Out of Stock (Archived)</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Size-Specific Stock Management */}
+              <div>
+                <label className="block text-[10px] font-extrabold uppercase tracking-widest text-neutral-400 mb-1.5">
+                  Initial Size Availability (Click to toggle)
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {["S", "M", "L", "XL", "XXL"].map((sz) => {
+                    const currentStock = newProduct.sizeStock || { S: true, M: true, L: true, XL: true, XXL: true };
+                    const isAvail = currentStock[sz] !== false;
+                    return (
+                      <button
+                        key={sz}
+                        type="button"
+                        onClick={() => {
+                          const updated = { ...currentStock, [sz]: !isAvail };
+                          setNewProduct({
+                            ...newProduct,
+                            sizeStock: updated,
+                            inStock: Object.values(updated).some(Boolean),
+                          });
+                        }}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 ${
+                          isAvail
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                            : "bg-red-50 text-red-600 border-red-200 line-through opacity-70 hover:bg-red-100"
+                        }`}
+                      >
+                        <span>Size {sz}</span>
+                        <span className={`w-2 h-2 rounded-full ${isAvail ? "bg-emerald-500" : "bg-red-500"}`} />
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-neutral-400 mt-1">
+                  Green = In Stock & Purchasable. Red Line-through = Temporarily Out of Stock.
+                </p>
               </div>
 
               {/* Buttons */}

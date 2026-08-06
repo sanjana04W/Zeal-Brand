@@ -55,8 +55,28 @@ export const messageStore = {
   add(msg: Omit<Message, "id" | "date" | "status" | "createdAt">): Message {
     const messages = readMessages();
     const now = new Date();
+
+    const cleanMsg = {
+      name: (msg.name || "Customer").trim(),
+      email: (msg.email || "").trim().toLowerCase(),
+      phone: (msg.phone || "").trim(),
+      subject: (msg.subject || "").trim(),
+      message: (msg.message || "").trim(),
+    };
+
+    // Rapid deduplication (same email/name & message within 5 seconds)
+    const existing = messages.find(
+      (m) =>
+        m.email === cleanMsg.email &&
+        m.message === cleanMsg.message &&
+        Math.abs(Date.now() - m.createdAt) < 5000
+    );
+    if (existing) {
+      return existing;
+    }
+
     const newMsg: Message = {
-      ...msg,
+      ...cleanMsg,
       id: `M-${Date.now()}`,
       status: "Unread",
       createdAt: Date.now(),
