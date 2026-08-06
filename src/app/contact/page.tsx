@@ -196,7 +196,7 @@ export default function Contact() {
               viewport={{ once: true }}
               transition={{ duration: 0.6 }}
             >
-              <div className="bg-white rounded-3xl p-8 md:p-12 shadow-xl border border-border sticky top-32">
+              <div className="bg-white rounded-3xl p-8 md:p-12 shadow-xl border border-border">
                 <div className="mb-8">
                   <h2 className="text-3xl font-black uppercase tracking-tighter mb-3">Send a Message</h2>
                   <p className="text-muted-foreground">Fill out the form below and we'll get back to you within 24 hours.</p>
