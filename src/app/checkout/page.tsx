@@ -205,6 +205,7 @@ const ITEM_COLORS = [
 export default function Checkout() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [showAuthModal, setShowAuthModal] = useState(false);
   const { clearCart, items, getCartTotal } = useCartStore();
   const { isAuthenticated, user } = useAuthStore();
@@ -230,6 +231,7 @@ export default function Checkout() {
 
   const executeOrderPlacement = async (fd: FormData | null) => {
     setIsSubmitting(true);
+    setSubmitError("");
     const delivery = 400;
     const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
     const randomId = Math.floor(Math.random() * 90000) + 10000;
@@ -266,26 +268,32 @@ export default function Checkout() {
       date: new Date().toISOString(),
     };
 
-    // 1. PRIMARY: Save to server (visible to admin on ALL browsers/devices)
+    // PRIMARY: Save to server database (orders.json) — required for admin panel
     try {
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(orderRecord),
       });
+
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        console.error("Server rejected order:", errData);
+        throw new Error(errData.error || `Server error ${res.status}`);
       }
-    } catch (err) {
-      console.error("Failed to reach /api/orders — order may not appear in admin panel:", err);
+    } catch (err: any) {
+      console.error("Order save failed:", err);
+      setSubmitError(
+        "⚠️ Failed to save your order. Please check your internet connection and try again."
+      );
+      setIsSubmitting(false);
+      return; // STOP — do NOT navigate away, do NOT clear cart
     }
 
-    // 2. SECONDARY: Also save to local client store for instant same-device UI
+    // SECONDARY: Save to client store for same-device UI (confirmation page)
     addOrder(orderRecord);
     setLastOrder(orderRecord);
 
-    // 3. Add admin notification
+    // Notify admin
     addNotification({
       type: "ORDER",
       title: "New Order Placed",
@@ -398,6 +406,17 @@ export default function Checkout() {
             </div>
 
             <form id="checkout-form" onSubmit={handleSubmit} className="space-y-6">
+              {/* Server Save Error Banner */}
+              {submitError && (
+                <div className="flex items-start gap-3 bg-red-50 border border-red-300 text-red-800 rounded-xl p-4">
+                  <span className="text-red-500 text-lg shrink-0">⚠️</span>
+                  <div>
+                    <p className="font-bold text-sm">Order Could Not Be Saved</p>
+                    <p className="text-xs mt-0.5">{submitError.replace("⚠️ ", "")}</p>
+                    <p className="text-xs mt-1 text-red-600 font-semibold">Make sure the app is running (<code className="bg-red-100 px-1 rounded">npm run dev</code>) and try again.</p>
+                  </div>
+                </div>
+              )}
               {/* Full Name + Phone */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">

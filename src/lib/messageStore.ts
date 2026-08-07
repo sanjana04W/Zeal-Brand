@@ -1,5 +1,5 @@
-// File-based persistent message store — survives server restarts and re-logins
-// Messages are written to src/lib/messages.json so they are never lost.
+// Robust file-based store for messages.
+// Reads ONLY from disk on every call. writeToDisk throws on failure.
 
 import fs from "fs";
 import path from "path";
@@ -18,67 +18,50 @@ export interface Message {
 
 const DB_PATH = path.join(process.cwd(), "src", "lib", "messages.json");
 
-declare global {
-  var __messagesCache: Message[] | undefined;
+function ensureFile(): void {
+  if (!fs.existsSync(DB_PATH)) {
+    fs.writeFileSync(DB_PATH, "[]", "utf-8");
+  }
 }
 
-function readMessages(): Message[] {
-  let disk: Message[] = [];
+function readFromDisk(): Message[] {
   try {
-    if (fs.existsSync(DB_PATH)) {
-      const raw = fs.readFileSync(DB_PATH, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        disk = parsed;
-      }
-    }
-  } catch {
-    /* ignore read errors */
+    ensureFile();
+    const raw = fs.readFileSync(DB_PATH, "utf-8").trim();
+    if (!raw || raw === "") return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.error("[messageStore] Failed to read messages.json:", err);
+    return [];
   }
-
-  const cache = globalThis.__messagesCache || [];
-  const map = new Map<string, Message>();
-
-  for (const item of [...disk, ...cache]) {
-    if (item && item.id) {
-      map.set(item.id, item);
-    }
-  }
-
-  const merged = Array.from(map.values()).sort((a, b) => b.createdAt - a.createdAt);
-  globalThis.__messagesCache = merged;
-  return merged;
 }
 
-function writeMessages(messages: Message[]): void {
-  globalThis.__messagesCache = messages;
+function writeToDisk(messages: Message[]): void {
   try {
+    ensureFile();
     fs.writeFileSync(DB_PATH, JSON.stringify(messages, null, 2), "utf-8");
   } catch (err) {
-    console.warn("Could not persist messages.json to disk (expected in serverless environments):", err);
+    throw new Error(`[messageStore] Failed to write messages.json: ${err}`);
   }
 }
 
 export const messageStore = {
   getAll(): Message[] {
-    return readMessages().sort((a, b) => b.createdAt - a.createdAt);
+    return readFromDisk().sort((a, b) => b.createdAt - a.createdAt);
   },
 
   add(msg: Omit<Message, "id" | "date" | "status" | "createdAt">): Message {
-    const messages = readMessages();
+    const messages = readFromDisk();
     const now = new Date();
 
-    const cleanMsg = {
+    const newMsg: Message = {
+      id: `M-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       name: (msg.name || "Customer").trim(),
       email: (msg.email || "").trim().toLowerCase(),
       phone: (msg.phone || "").trim(),
-      subject: (msg.subject || "Customer Inquiry").trim(),
+      subject: (msg.subject || "Customer Inquiry").trim().slice(0, 100),
       message: (msg.message || "").trim(),
-    };
-
-    const newMsg: Message = {
-      ...cleanMsg,
-      id: `M-${Date.now()}`,
       status: "Unread",
       createdAt: Date.now(),
       date: now.toLocaleString("en-GB", {
@@ -89,21 +72,22 @@ export const messageStore = {
         year: "numeric",
       }),
     };
+
     messages.unshift(newMsg);
-    writeMessages(messages);
+    writeToDisk(messages); // Throws if write fails
     return newMsg;
   },
 
   updateStatus(id: string, status: Message["status"]): boolean {
-    const messages = readMessages();
+    const messages = readFromDisk();
     const idx = messages.findIndex((m) => m.id === id);
     if (idx === -1) return false;
     messages[idx] = { ...messages[idx], status };
-    writeMessages(messages);
+    writeToDisk(messages);
     return true;
   },
 
   getUnreadCount(): number {
-    return readMessages().filter((m) => m.status === "Unread").length;
+    return readFromDisk().filter((m) => m.status === "Unread").length;
   },
 };

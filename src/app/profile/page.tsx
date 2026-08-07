@@ -73,8 +73,16 @@ export default function ProfilePage() {
       setPhone(user.phone || "");
       setAddress(user.address || "No 123, Main Street, Colombo 05");
 
+      const normalizePhone = (p: string) => {
+        if (!p) return "";
+        let d = p.replace(/\D/g, "");
+        if (d.startsWith("94") && d.length === 11) d = d.slice(2);
+        else if (d.startsWith("0") && d.length === 10) d = d.slice(1);
+        return d;
+      };
+
       const userEmailClean = (user.email || "").trim().toLowerCase();
-      const userPhoneClean = (user.phone || "").trim().replace(/\D/g, "");
+      const userPhoneNorm = normalizePhone(user.phone || "");
 
       const loadUserOrders = async () => {
         try {
@@ -87,9 +95,9 @@ export default function ProfilePage() {
             const allOrders: any[] = data.orders ?? [];
             const matched = allOrders.filter((o) => {
               const orderEmail = (o.userEmail || "").trim().toLowerCase();
-              const orderPhone = (o.phone || "").trim().replace(/\D/g, "");
+              const orderPhoneNorm = normalizePhone(o.phone || "");
               const emailMatch = Boolean(userEmailClean && orderEmail === userEmailClean);
-              const phoneMatch = Boolean(userPhoneClean && orderPhone && orderPhone === userPhoneClean);
+              const phoneMatch = Boolean(userPhoneNorm && orderPhoneNorm && orderPhoneNorm === userPhoneNorm);
               return emailMatch || phoneMatch;
             });
             setUserOrders(matched);

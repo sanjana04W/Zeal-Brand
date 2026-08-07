@@ -1,71 +1,69 @@
 import { NextRequest, NextResponse } from "next/server";
 import { messageStore } from "@/lib/messageStore";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 // GET /api/messages — returns all messages
 export async function GET() {
-  const messages = messageStore.getAll();
-  const unreadCount = messageStore.getUnreadCount();
-  return NextResponse.json({ messages, unreadCount });
+  try {
+    const messages = messageStore.getAll();
+    const unreadCount = messageStore.getUnreadCount();
+    return NextResponse.json({ messages, unreadCount });
+  } catch (err) {
+    console.error("/api/messages GET error:", err);
+    return NextResponse.json({ error: "Failed to read messages." }, { status: 500 });
+  }
 }
 
-// POST /api/messages — creates a new message from contact form or inquiry
+// POST /api/messages — creates a new message
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const name = String(body.name || body.fullName || body.userName || body.senderName || "Customer").trim();
-    const email = String(body.email || body.emailAddress || body.userEmail || body.senderEmail || "").trim().toLowerCase();
-    const phone = String(body.phone || body.telephone || body.mobile || body.contactNumber || "").trim();
-    const message = String(body.message || body.inquiry || body.comment || body.text || body.body || "").trim();
-    const rawSubject = String(body.subject || body.topic || body.title || "").trim();
-    const subject = rawSubject || (message ? `Inquiry from ${name}` : `Message from ${name}`);
+    const name = String(body.name || body.fullName || "Customer").trim();
+    const email = String(body.email || body.emailAddress || "").trim().toLowerCase();
+    const phone = String(body.phone || body.telephone || "").trim();
+    const message = String(body.message || body.inquiry || body.text || "").trim();
+    const rawSubject = String(body.subject || body.topic || "").trim();
+    const subject = rawSubject || `Inquiry from ${name}`;
 
-    if (!message && !name) {
-      return NextResponse.json(
-        { error: "A message or name is required to submit an inquiry." },
-        { status: 400 }
-      );
+    if (!message) {
+      return NextResponse.json({ error: "A message body is required." }, { status: 400 });
     }
-
     if (!email && !phone) {
       return NextResponse.json(
-        { error: "Please provide an email or phone number for follow-up." },
+        { error: "Please provide an email or phone number." },
         { status: 400 }
       );
     }
 
-    const newMsg = messageStore.add({
-      name: name || "Customer",
-      email: email || "no-email@zealbrand.com",
-      phone,
-      subject: subject.slice(0, 100),
-      message: message || "(No message body provided)",
-    });
-
+    const newMsg = messageStore.add({ name, email, phone, subject, message });
+    console.log(`[API] Message saved: ${newMsg.id} from ${newMsg.name} (${newMsg.email || newMsg.phone})`);
     return NextResponse.json({ success: true, message: newMsg }, { status: 201 });
-  } catch (error) {
-    console.error("API /api/messages POST error:", error);
-    return NextResponse.json({ error: "Invalid request payload." }, { status: 400 });
+  } catch (err) {
+    console.error("/api/messages POST error:", err);
+    return NextResponse.json(
+      { error: "Failed to save message to database. Please try again." },
+      { status: 500 }
+    );
   }
 }
 
-// PATCH /api/messages — update status of a message
+// PATCH /api/messages — update status
 export async function PATCH(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { id, status } = body;
-
+    const { id, status } = await req.json();
     if (!id || !status) {
       return NextResponse.json({ error: "id and status required." }, { status: 400 });
     }
-
     const updated = messageStore.updateStatus(id, status);
     if (!updated) {
       return NextResponse.json({ error: "Message not found." }, { status: 404 });
     }
-
     return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  } catch (err) {
+    console.error("/api/messages PATCH error:", err);
+    return NextResponse.json({ error: "Failed to update message." }, { status: 500 });
   }
 }
