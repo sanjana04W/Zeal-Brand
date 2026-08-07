@@ -96,6 +96,8 @@ export default function MessagesManagement() {
       setMessages((prev) =>
         prev.map((m) => (m.id === msg.id ? { ...m, status: "Read" } : m))
       );
+      // Reset filter to show updated message
+      setFilterTab("All");
     }
   };
 
@@ -114,6 +116,8 @@ export default function MessagesManagement() {
     setSelectedMessage((prev) => (prev ? { ...prev, status: "Replied" } : null));
     setRepliedSuccess(true);
     setReplyText("");
+    // Reset filter to show updated message
+    setFilterTab("All");
   };
 
   const unreadCount = messages.filter((m) => m.status === "Unread").length;
