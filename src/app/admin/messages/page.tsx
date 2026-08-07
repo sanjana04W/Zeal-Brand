@@ -15,6 +15,8 @@ interface Message {
   createdAt: number;
 }
 
+import { useMessageStore } from "@/lib/messageStoreClient";
+
 export default function MessagesManagement() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
@@ -31,22 +33,40 @@ export default function MessagesManagement() {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
-      const res = await fetch("/api/messages", {
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const msgs: Message[] = (data.messages ?? []).sort(
-          (a: Message, b: Message) => (b.createdAt || 0) - (a.createdAt || 0)
-        );
-        setMessages(msgs);
-        setLastRefreshed(new Date());
-        setSelectedMessage((prev) => {
-          if (!prev && msgs.length > 0) return msgs[0];
-          return prev ? msgs.find((m) => m.id === prev.id) ?? prev : msgs[0] || null;
+      let serverMessages: Message[] = [];
+      try {
+        const res = await fetch("/api/messages", {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
         });
+        if (res.ok) {
+          const data = await res.json();
+          serverMessages = data.messages ?? [];
+        }
+      } catch (e) {
+        console.warn("Could not reach /api/messages:", e);
       }
+
+      const clientStoreMessages = useMessageStore.getState().messages;
+
+      // Deduplicate and merge server + client messages
+      const map = new Map<string, Message>();
+      for (const m of [...serverMessages, ...clientStoreMessages]) {
+        if (m && m.id) {
+          map.set(m.id, m as Message);
+        }
+      }
+
+      const merged = Array.from(map.values()).sort(
+        (a: Message, b: Message) => (b.createdAt || 0) - (a.createdAt || 0)
+      );
+
+      setMessages(merged);
+      setLastRefreshed(new Date());
+      setSelectedMessage((prev) => {
+        if (!prev && merged.length > 0) return merged[0];
+        return prev ? merged.find((m) => m.id === prev.id) ?? prev : merged[0] || null;
+      });
     } catch (err) {
       console.error("Failed to load messages:", err);
     } finally {

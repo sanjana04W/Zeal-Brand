@@ -38,6 +38,8 @@ const STATUS_STYLES: Record<string, string> = {
   CANCELLED: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
+import { useOrderStore } from "@/lib/orderStore";
+
 export default function OrdersManagement() {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,14 +52,32 @@ export default function OrdersManagement() {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
-      const res = await fetch("/api/orders", {
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setOrders(data.orders ?? []);
+      let serverOrders: OrderRecord[] = [];
+      try {
+        const res = await fetch("/api/orders", {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          serverOrders = data.orders ?? [];
+        }
+      } catch (e) {
+        console.warn("Could not reach /api/orders:", e);
       }
+
+      const clientOrders = useOrderStore.getState().allOrders;
+      const map = new Map<string, OrderRecord>();
+      for (const o of [...serverOrders, ...clientOrders]) {
+        if (o && o.orderId) {
+          map.set(o.orderId, o as OrderRecord);
+        }
+      }
+
+      const merged = Array.from(map.values()).sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+      setOrders(merged);
     } catch (err) {
       console.error("Failed to load orders:", err);
     } finally {

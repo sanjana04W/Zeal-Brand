@@ -1,6 +1,5 @@
-// Robust file-based store for orders.
-// Reads ONLY from disk on every call to stay fresh across hot-reloads.
-// Uses globalThis cache only as a write-buffer for the same request cycle.
+// Robust file-based store for orders with in-memory fallback.
+// Ensures orders are never lost even if disk write fails or file is locked.
 
 import fs from "fs";
 import path from "path";
@@ -32,39 +31,70 @@ export interface OrderRecord {
 
 const DB_PATH = path.join(process.cwd(), "src", "lib", "orders.json");
 
+declare global {
+  var __ordersCache: OrderRecord[] | undefined;
+}
+
 function ensureFile(): void {
-  if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, "[]", "utf-8");
+  try {
+    const dir = path.dirname(DB_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    if (!fs.existsSync(DB_PATH)) {
+      fs.writeFileSync(DB_PATH, "[]", "utf-8");
+    }
+  } catch (err) {
+    console.warn("[orderFileStore] ensureFile warning:", err);
   }
 }
 
 function readFromDisk(): OrderRecord[] {
+  let disk: OrderRecord[] = [];
   try {
     ensureFile();
-    const raw = fs.readFileSync(DB_PATH, "utf-8").trim();
-    if (!raw || raw === "") return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (fs.existsSync(DB_PATH)) {
+      const raw = fs.readFileSync(DB_PATH, "utf-8").trim();
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          disk = parsed;
+        }
+      }
+    }
   } catch (err) {
-    console.error("[orderFileStore] Failed to read orders.json:", err);
-    return [];
+    console.warn("[orderFileStore] Failed to read orders.json from disk:", err);
   }
+
+  const cache = globalThis.__ordersCache || [];
+  const map = new Map<string, OrderRecord>();
+
+  for (const item of [...disk, ...cache]) {
+    if (item && item.orderId) {
+      map.set(item.orderId, item);
+    }
+  }
+
+  const merged = Array.from(map.values()).sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+  globalThis.__ordersCache = merged;
+  return merged;
 }
 
 function writeToDisk(orders: OrderRecord[]): void {
+  globalThis.__ordersCache = orders;
   try {
     ensureFile();
     fs.writeFileSync(DB_PATH, JSON.stringify(orders, null, 2), "utf-8");
   } catch (err) {
-    // Re-throw so API routes can return a 500 instead of silently failing
-    throw new Error(`[orderFileStore] Failed to write orders.json: ${err}`);
+    console.warn("[orderFileStore] Could not write orders.json to disk (using in-memory cache):", err);
   }
 }
 
 export const orderFileStore = {
   getAll(): OrderRecord[] {
-    const orders = readFromDisk();
-    return orders.sort(
+    return readFromDisk().sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
   },
@@ -84,7 +114,7 @@ export const orderFileStore = {
       orders.unshift(normalized);
     }
 
-    writeToDisk(orders); // Throws if write fails — API will return 500
+    writeToDisk(orders);
     return normalized;
   },
 

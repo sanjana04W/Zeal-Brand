@@ -4,6 +4,7 @@ import { Mail, MessageCircle, Clock, MapPin, Send, Plus, Minus, CheckCircle2 } f
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNotificationStore } from "@/lib/notificationStore";
+import { useMessageStore } from "@/lib/messageStoreClient";
 
 const FAQS = [
   {
@@ -52,6 +53,11 @@ export default function Contact() {
       subject: subject.trim() || `Inquiry from ${name || "Customer"}`,
       message: message.trim(),
     };
+
+    // Save to client store immediately
+    try {
+      useMessageStore.getState().addMessage(payload);
+    } catch { /* ignore */ }
 
     try {
       const res = await fetch("/api/messages", {

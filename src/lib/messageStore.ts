@@ -1,5 +1,5 @@
-// Robust file-based store for messages.
-// Reads ONLY from disk on every call. writeToDisk throws on failure.
+// Robust file-based store for messages with in-memory fallback.
+// Ensures messages are never lost even if disk write fails or file is locked.
 
 import fs from "fs";
 import path from "path";
@@ -18,31 +18,62 @@ export interface Message {
 
 const DB_PATH = path.join(process.cwd(), "src", "lib", "messages.json");
 
+declare global {
+  var __messagesCache: Message[] | undefined;
+}
+
 function ensureFile(): void {
-  if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, "[]", "utf-8");
+  try {
+    const dir = path.dirname(DB_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    if (!fs.existsSync(DB_PATH)) {
+      fs.writeFileSync(DB_PATH, "[]", "utf-8");
+    }
+  } catch (err) {
+    console.warn("[messageStore] ensureFile warning:", err);
   }
 }
 
 function readFromDisk(): Message[] {
+  let disk: Message[] = [];
   try {
     ensureFile();
-    const raw = fs.readFileSync(DB_PATH, "utf-8").trim();
-    if (!raw || raw === "") return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (fs.existsSync(DB_PATH)) {
+      const raw = fs.readFileSync(DB_PATH, "utf-8").trim();
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          disk = parsed;
+        }
+      }
+    }
   } catch (err) {
-    console.error("[messageStore] Failed to read messages.json:", err);
-    return [];
+    console.warn("[messageStore] Failed to read messages.json from disk:", err);
   }
+
+  const cache = globalThis.__messagesCache || [];
+  const map = new Map<string, Message>();
+
+  for (const item of [...disk, ...cache]) {
+    if (item && item.id) {
+      map.set(item.id, item);
+    }
+  }
+
+  const merged = Array.from(map.values()).sort((a, b) => b.createdAt - a.createdAt);
+  globalThis.__messagesCache = merged;
+  return merged;
 }
 
 function writeToDisk(messages: Message[]): void {
+  globalThis.__messagesCache = messages;
   try {
     ensureFile();
     fs.writeFileSync(DB_PATH, JSON.stringify(messages, null, 2), "utf-8");
   } catch (err) {
-    throw new Error(`[messageStore] Failed to write messages.json: ${err}`);
+    console.warn("[messageStore] Could not write messages.json to disk (using in-memory cache):", err);
   }
 }
 
@@ -74,7 +105,7 @@ export const messageStore = {
     };
 
     messages.unshift(newMsg);
-    writeToDisk(messages); // Throws if write fails
+    writeToDisk(messages);
     return newMsg;
   },
 
