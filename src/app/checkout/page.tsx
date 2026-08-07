@@ -266,20 +266,24 @@ export default function Checkout() {
       date: new Date().toISOString(),
     };
 
-    // 1. Save to local client store immediately for 100% instant sync
-    addOrder(orderRecord);
-    setLastOrder(orderRecord);
-
-    // 2. Persist order to server API (survives restarts & re-logins)
+    // 1. PRIMARY: Save to server (visible to admin on ALL browsers/devices)
     try {
-      await fetch("/api/orders", {
+      const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(orderRecord),
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        console.error("Server rejected order:", errData);
+      }
     } catch (err) {
-      console.warn("Server order save attempt warning:", err);
+      console.error("Failed to reach /api/orders — order may not appear in admin panel:", err);
     }
+
+    // 2. SECONDARY: Also save to local client store for instant same-device UI
+    addOrder(orderRecord);
+    setLastOrder(orderRecord);
 
     // 3. Add admin notification
     addNotification({

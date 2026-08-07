@@ -15,8 +15,6 @@ interface Message {
   createdAt: number;
 }
 
-import { useMessageStore } from "@/lib/messageStoreClient";
-
 export default function MessagesManagement() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
@@ -29,40 +27,26 @@ export default function MessagesManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterTab, setFilterTab] = useState<"All" | "Unread" | "Read" | "Replied">("All");
 
-  const { messages: localMessages, updateMessageStatus } = useMessageStore();
-
   const fetchMessages = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
-      let serverMessages: Message[] = [];
-      try {
-        const res = await fetch("/api/messages", { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          serverMessages = data.messages ?? [];
-        }
-      } catch (e) {
-        console.warn("Could not reach /api/messages, using persistent local messages store:", e);
-      }
-
-      const clientStoreMessages = useMessageStore.getState().messages;
-
-      // Deduplicate and merge server + client messages
-      const map = new Map<string, Message>();
-      for (const m of [...serverMessages, ...clientStoreMessages]) {
-        if (m && m.id) {
-          map.set(m.id, m as Message);
-        }
-      }
-
-      const merged = Array.from(map.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-      setMessages(merged);
-      setLastRefreshed(new Date());
-      setSelectedMessage((prev) => {
-        if (!prev && merged.length > 0) return merged[0];
-        return prev ? merged.find((m) => m.id === prev.id) ?? prev : merged[0] || null;
+      const res = await fetch("/api/messages", {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
       });
+      if (res.ok) {
+        const data = await res.json();
+        const msgs: Message[] = (data.messages ?? []).sort(
+          (a: Message, b: Message) => (b.createdAt || 0) - (a.createdAt || 0)
+        );
+        setMessages(msgs);
+        setLastRefreshed(new Date());
+        setSelectedMessage((prev) => {
+          if (!prev && msgs.length > 0) return msgs[0];
+          return prev ? msgs.find((m) => m.id === prev.id) ?? prev : msgs[0] || null;
+        });
+      }
     } catch (err) {
       console.error("Failed to load messages:", err);
     } finally {
@@ -75,9 +59,9 @@ export default function MessagesManagement() {
     fetchMessages();
   }, [fetchMessages]);
 
-  // Auto-refresh every 10 seconds
+  // Auto-refresh every 5 seconds — works on Edge, mobile, all devices
   useEffect(() => {
-    const interval = setInterval(() => fetchMessages(true), 10000);
+    const interval = setInterval(() => fetchMessages(true), 5000);
     return () => clearInterval(interval);
   }, [fetchMessages]);
 
@@ -87,31 +71,32 @@ export default function MessagesManagement() {
     setReplyText("");
     setShowDetail(true);
     if (msg.status === "Unread") {
-      updateMessageStatus(msg.id, "Read");
+      // Optimistic UI update
+      setMessages((prev) =>
+        prev.map((m) => (m.id === msg.id ? { ...m, status: "Read" } : m))
+      );
+      setSelectedMessage({ ...msg, status: "Read" });
       await fetch("/api/messages", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: msg.id, status: "Read" }),
       });
-      setMessages((prev) =>
-        prev.map((m) => (m.id === msg.id ? { ...m, status: "Read" } : m))
-      );
     }
   };
 
   const handleSendReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!replyText.trim() || !selectedMessage) return;
-    updateMessageStatus(selectedMessage.id, "Replied");
+    // Optimistic UI update
+    setMessages((prev) =>
+      prev.map((m) => (m.id === selectedMessage.id ? { ...m, status: "Replied" } : m))
+    );
+    setSelectedMessage((prev) => (prev ? { ...prev, status: "Replied" } : null));
     await fetch("/api/messages", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: selectedMessage.id, status: "Replied" }),
     });
-    setMessages((prev) =>
-      prev.map((m) => (m.id === selectedMessage.id ? { ...m, status: "Replied" } : m))
-    );
-    setSelectedMessage((prev) => (prev ? { ...prev, status: "Replied" } : null));
     setRepliedSuccess(true);
     setReplyText("");
   };
