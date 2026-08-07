@@ -10,6 +10,7 @@ import {
   Package,
 } from "lucide-react";
 import { RefreshCw } from "lucide-react";
+import { useOrderStore } from "@/lib/orderStore";
 
 const STATUS_CONFIG = [
   { label: "PENDING",    color: "bg-amber-500",   text: "text-amber-600" },
@@ -37,14 +38,29 @@ export default function AnalyticsDashboard() {
   const loadData = async (silent = false) => {
     if (!silent) setRefreshing(true);
     try {
-      const res = await fetch("/api/orders", {
-        cache: "no-store",
-        headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setAllOrders(data.orders || []);
+      let serverOrders: any[] = [];
+      try {
+        const res = await fetch("/api/orders", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          serverOrders = data.orders || [];
+        }
+      } catch (err) {
+        console.warn("Failed to load analytics orders from API:", err);
       }
+
+      const clientOrders = useOrderStore.getState().allOrders;
+      const map = new Map<string, any>();
+      for (const o of [...serverOrders, ...clientOrders]) {
+        if (o && o.orderId) {
+          map.set(o.orderId, o);
+        }
+      }
+
+      const merged = Array.from(map.values()).sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+      setAllOrders(merged);
 
       try {
         const prodRes = await fetch("/api/products", { cache: "no-store" });
@@ -54,8 +70,6 @@ export default function AnalyticsDashboard() {
           setOutOfStockCount(lowStock);
         }
       } catch { /* ignore */ }
-    } catch (err) {
-      console.error("Failed to load analytics:", err);
     } finally {
       setRefreshing(false);
     }

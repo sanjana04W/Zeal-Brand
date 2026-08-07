@@ -1,38 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { orderFileStore } from "@/lib/orderFileStore";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
-// GET /api/orders — returns all orders
+// GET /api/orders — returns all orders + pending count + revenue
 export async function GET() {
-  try {
-    const orders = orderFileStore.getAll();
-    const pendingCount = orderFileStore.getPendingCount();
-    const totalRevenue = orderFileStore.getTotalRevenue();
-    return NextResponse.json({ orders, pendingCount, totalRevenue });
-  } catch (err) {
-    console.error("/api/orders GET error:", err);
-    return NextResponse.json({ error: "Failed to read orders." }, { status: 500 });
-  }
+  const orders = orderFileStore.getAll();
+  const pendingCount = orderFileStore.getPendingCount();
+  const totalRevenue = orderFileStore.getTotalRevenue();
+  return NextResponse.json({ orders, pendingCount, totalRevenue });
 }
 
 // POST /api/orders — creates a new order from checkout
 export async function POST(req: NextRequest) {
   try {
     const order = await req.json();
-    if (!order.orderId || !order.items || !Array.isArray(order.items)) {
-      return NextResponse.json({ error: "Invalid order data: orderId and items are required." }, { status: 400 });
+    if (!order.orderId || !order.items) {
+      return NextResponse.json({ error: "Invalid order data." }, { status: 400 });
     }
     const saved = orderFileStore.add(order);
-    console.log(`[API] Order saved: ${saved.orderId} for ${saved.userEmail}`);
     return NextResponse.json({ success: true, order: saved }, { status: 201 });
-  } catch (err) {
-    console.error("/api/orders POST error:", err);
-    return NextResponse.json(
-      { error: "Failed to save order to database. Please try again." },
-      { status: 500 }
-    );
+  } catch {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 }
 
@@ -48,8 +35,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Order not found." }, { status: 404 });
     }
     return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error("/api/orders PATCH error:", err);
-    return NextResponse.json({ error: "Failed to update order." }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 }

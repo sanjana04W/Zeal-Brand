@@ -29,22 +29,21 @@ export default function MessagesManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterTab, setFilterTab] = useState<"All" | "Unread" | "Read" | "Replied">("All");
 
+  const { messages: localMessages, updateMessageStatus } = useMessageStore();
+
   const fetchMessages = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
       let serverMessages: Message[] = [];
       try {
-        const res = await fetch("/api/messages", {
-          cache: "no-store",
-          headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
-        });
+        const res = await fetch("/api/messages", { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
           serverMessages = data.messages ?? [];
         }
       } catch (e) {
-        console.warn("Could not reach /api/messages:", e);
+        console.warn("Could not reach /api/messages, using persistent local messages store:", e);
       }
 
       const clientStoreMessages = useMessageStore.getState().messages;
@@ -57,10 +56,7 @@ export default function MessagesManagement() {
         }
       }
 
-      const merged = Array.from(map.values()).sort(
-        (a: Message, b: Message) => (b.createdAt || 0) - (a.createdAt || 0)
-      );
-
+      const merged = Array.from(map.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       setMessages(merged);
       setLastRefreshed(new Date());
       setSelectedMessage((prev) => {
@@ -79,9 +75,9 @@ export default function MessagesManagement() {
     fetchMessages();
   }, [fetchMessages]);
 
-  // Auto-refresh every 5 seconds — works on Edge, mobile, all devices
+  // Auto-refresh every 10 seconds
   useEffect(() => {
-    const interval = setInterval(() => fetchMessages(true), 5000);
+    const interval = setInterval(() => fetchMessages(true), 10000);
     return () => clearInterval(interval);
   }, [fetchMessages]);
 
@@ -91,32 +87,31 @@ export default function MessagesManagement() {
     setReplyText("");
     setShowDetail(true);
     if (msg.status === "Unread") {
-      // Optimistic UI update
-      setMessages((prev) =>
-        prev.map((m) => (m.id === msg.id ? { ...m, status: "Read" } : m))
-      );
-      setSelectedMessage({ ...msg, status: "Read" });
+      updateMessageStatus(msg.id, "Read");
       await fetch("/api/messages", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: msg.id, status: "Read" }),
       });
+      setMessages((prev) =>
+        prev.map((m) => (m.id === msg.id ? { ...m, status: "Read" } : m))
+      );
     }
   };
 
   const handleSendReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!replyText.trim() || !selectedMessage) return;
-    // Optimistic UI update
-    setMessages((prev) =>
-      prev.map((m) => (m.id === selectedMessage.id ? { ...m, status: "Replied" } : m))
-    );
-    setSelectedMessage((prev) => (prev ? { ...prev, status: "Replied" } : null));
+    updateMessageStatus(selectedMessage.id, "Replied");
     await fetch("/api/messages", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: selectedMessage.id, status: "Replied" }),
     });
+    setMessages((prev) =>
+      prev.map((m) => (m.id === selectedMessage.id ? { ...m, status: "Replied" } : m))
+    );
+    setSelectedMessage((prev) => (prev ? { ...prev, status: "Replied" } : null));
     setRepliedSuccess(true);
     setReplyText("");
   };

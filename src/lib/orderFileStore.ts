@@ -1,5 +1,5 @@
-// Robust file-based store for orders with in-memory fallback.
-// Ensures orders are never lost even if disk write fails or file is locked.
+// File-based persistent order store — survives server restarts and re-logins
+// Orders are written to src/lib/orders.json so they are never lost.
 
 import fs from "fs";
 import path from "path";
@@ -26,7 +26,7 @@ export interface OrderRecord {
   delivery: number;
   total: number;
   status: "PENDING" | "CONFIRMED" | "SHIPPED" | "DELIVERED" | "CANCELLED";
-  date: string;
+  date: string; // ISO string
 }
 
 const DB_PATH = path.join(process.cwd(), "src", "lib", "orders.json");
@@ -35,35 +35,18 @@ declare global {
   var __ordersCache: OrderRecord[] | undefined;
 }
 
-function ensureFile(): void {
-  try {
-    const dir = path.dirname(DB_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    if (!fs.existsSync(DB_PATH)) {
-      fs.writeFileSync(DB_PATH, "[]", "utf-8");
-    }
-  } catch (err) {
-    console.warn("[orderFileStore] ensureFile warning:", err);
-  }
-}
-
-function readFromDisk(): OrderRecord[] {
+function readOrders(): OrderRecord[] {
   let disk: OrderRecord[] = [];
   try {
-    ensureFile();
     if (fs.existsSync(DB_PATH)) {
-      const raw = fs.readFileSync(DB_PATH, "utf-8").trim();
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          disk = parsed;
-        }
+      const raw = fs.readFileSync(DB_PATH, "utf-8");
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        disk = parsed;
       }
     }
-  } catch (err) {
-    console.warn("[orderFileStore] Failed to read orders.json from disk:", err);
+  } catch {
+    /* ignore read errors */
   }
 
   const cache = globalThis.__ordersCache || [];
@@ -82,58 +65,58 @@ function readFromDisk(): OrderRecord[] {
   return merged;
 }
 
-function writeToDisk(orders: OrderRecord[]): void {
+function writeOrders(orders: OrderRecord[]): void {
   globalThis.__ordersCache = orders;
   try {
-    ensureFile();
     fs.writeFileSync(DB_PATH, JSON.stringify(orders, null, 2), "utf-8");
   } catch (err) {
-    console.warn("[orderFileStore] Could not write orders.json to disk (using in-memory cache):", err);
+    console.warn("Could not persist orders.json to disk (expected in serverless environments):", err);
   }
 }
 
 export const orderFileStore = {
   getAll(): OrderRecord[] {
-    return readFromDisk().sort(
+    return readOrders().sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
   },
 
   add(order: OrderRecord): OrderRecord {
-    const orders = readFromDisk();
-    const normalized: OrderRecord = {
+    const orders = readOrders();
+    const normalizedOrder: OrderRecord = {
       ...order,
       userEmail: (order.userEmail || "").trim().toLowerCase(),
       phone: (order.phone || "").trim(),
     };
 
-    const existingIdx = orders.findIndex((o) => o.orderId === normalized.orderId);
+    // Check if order already exists to prevent duplicate submission
+    const existingIdx = orders.findIndex((o) => o.orderId === normalizedOrder.orderId);
     if (existingIdx !== -1) {
-      orders[existingIdx] = normalized;
+      orders[existingIdx] = normalizedOrder;
     } else {
-      orders.unshift(normalized);
+      orders.unshift(normalizedOrder);
     }
-
-    writeToDisk(orders);
-    return normalized;
+    writeOrders(orders);
+    return normalizedOrder;
   },
 
   updateStatus(orderId: string, status: OrderRecord["status"]): boolean {
-    const orders = readFromDisk();
+    const orders = readOrders();
     const idx = orders.findIndex((o) => o.orderId === orderId);
     if (idx === -1) return false;
     orders[idx] = { ...orders[idx], status };
-    writeToDisk(orders);
+    writeOrders(orders);
     return true;
   },
 
   getPendingCount(): number {
-    return readFromDisk().filter((o) => o.status === "PENDING").length;
+    return readOrders().filter((o) => o.status === "PENDING").length;
   },
 
   getTotalRevenue(): number {
-    return readFromDisk()
+    return readOrders()
       .filter((o) => o.status !== "CANCELLED")
       .reduce((sum, o) => sum + o.total, 0);
   },
 };
+

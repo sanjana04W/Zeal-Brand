@@ -36,6 +36,7 @@ export default function Contact() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const { addNotification } = useNotificationStore();
+  const { addMessage } = useMessageStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,10 +55,8 @@ export default function Contact() {
       message: message.trim(),
     };
 
-    // Save to client store immediately
-    try {
-      useMessageStore.getState().addMessage(payload);
-    } catch { /* ignore */ }
+    // Save to client store immediately so it is never lost
+    addMessage(payload);
 
     try {
       const res = await fetch("/api/messages", {
@@ -81,11 +80,11 @@ export default function Contact() {
         setMessage("");
         setTimeout(() => setSent(false), 6000);
       } else {
-        const data = await res.json().catch(() => ({}));
+        const data = await res.json();
         setError(data.error || "Failed to send message. Please try again.");
       }
     } catch {
-      setError("Network error. Please check your connection and try again.");
+      setError("Network error. Please try again.");
     } finally {
       setSending(false);
     }

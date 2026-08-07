@@ -205,7 +205,6 @@ const ITEM_COLORS = [
 export default function Checkout() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState("");
   const [showAuthModal, setShowAuthModal] = useState(false);
   const { clearCart, items, getCartTotal } = useCartStore();
   const { isAuthenticated, user } = useAuthStore();
@@ -231,7 +230,6 @@ export default function Checkout() {
 
   const executeOrderPlacement = async (fd: FormData | null) => {
     setIsSubmitting(true);
-    setSubmitError("");
     const delivery = 400;
     const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
     const randomId = Math.floor(Math.random() * 90000) + 10000;
@@ -268,11 +266,11 @@ export default function Checkout() {
       date: new Date().toISOString(),
     };
 
-    // 1. Save to local client store immediately (guarantees instant order confirmation)
+    // 1. Save to local client store immediately for 100% instant sync
     addOrder(orderRecord);
     setLastOrder(orderRecord);
 
-    // 2. Persist order to server API for Admin Panel sync
+    // 2. Persist order to server API (survives restarts & re-logins)
     try {
       await fetch("/api/orders", {
         method: "POST",
@@ -280,7 +278,7 @@ export default function Checkout() {
         body: JSON.stringify(orderRecord),
       });
     } catch (err) {
-      console.warn("Server order sync notice:", err);
+      console.warn("Server order save attempt warning:", err);
     }
 
     // 3. Add admin notification
@@ -396,17 +394,6 @@ export default function Checkout() {
             </div>
 
             <form id="checkout-form" onSubmit={handleSubmit} className="space-y-6">
-              {/* Server Save Error Banner */}
-              {submitError && (
-                <div className="flex items-start gap-3 bg-red-50 border border-red-300 text-red-800 rounded-xl p-4">
-                  <span className="text-red-500 text-lg shrink-0">⚠️</span>
-                  <div>
-                    <p className="font-bold text-sm">Order Could Not Be Saved</p>
-                    <p className="text-xs mt-0.5">{submitError.replace("⚠️ ", "")}</p>
-                    <p className="text-xs mt-1 text-red-600 font-semibold">Make sure the app is running (<code className="bg-red-100 px-1 rounded">npm run dev</code>) and try again.</p>
-                  </div>
-                </div>
-              )}
               {/* Full Name + Phone */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">

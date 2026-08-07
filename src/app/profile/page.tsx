@@ -23,23 +23,7 @@ import {
   ShoppingBag,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/authStore";
-
-interface OrderRecord {
-  orderId: string;
-  userEmail: string;
-  fullName: string;
-  phone: string;
-  district: string;
-  address: string;
-  deliveryDate?: string;
-  notes?: string;
-  items: { id: string; name: string; price: number; quantity: number; size?: string }[];
-  subtotal: number;
-  delivery: number;
-  total: number;
-  status: "PENDING" | "CONFIRMED" | "SHIPPED" | "DELIVERED" | "CANCELLED";
-  date: string;
-}
+import { useOrderStore, OrderRecord } from "@/lib/orderStore";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -73,35 +57,38 @@ export default function ProfilePage() {
       setPhone(user.phone || "");
       setAddress(user.address || "No 123, Main Street, Colombo 05");
 
-      const normalizePhone = (p: string) => {
-        if (!p) return "";
-        let d = p.replace(/\D/g, "");
-        if (d.startsWith("94") && d.length === 11) d = d.slice(2);
-        else if (d.startsWith("0") && d.length === 10) d = d.slice(1);
-        return d;
-      };
-
       const userEmailClean = (user.email || "").trim().toLowerCase();
-      const userPhoneNorm = normalizePhone(user.phone || "");
+      const userPhoneClean = (user.phone || "").trim().replace(/\D/g, "");
 
       const loadUserOrders = async () => {
         try {
-          const res = await fetch("/api/orders", {
-            cache: "no-store",
-            headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
-          });
-          if (res.ok) {
-            const data = await res.json();
-            const allOrders: any[] = data.orders ?? [];
-            const matched = allOrders.filter((o) => {
-              const orderEmail = (o.userEmail || "").trim().toLowerCase();
-              const orderPhoneNorm = normalizePhone(o.phone || "");
-              const emailMatch = Boolean(userEmailClean && orderEmail === userEmailClean);
-              const phoneMatch = Boolean(userPhoneNorm && orderPhoneNorm && orderPhoneNorm === userPhoneNorm);
-              return emailMatch || phoneMatch;
-            });
-            setUserOrders(matched);
+          let serverOrders: any[] = [];
+          try {
+            const res = await fetch("/api/orders", { cache: "no-store" });
+            if (res.ok) {
+              const data = await res.json();
+              serverOrders = data.orders ?? [];
+            }
+          } catch (err) {
+            console.warn("Could not fetch /api/orders:", err);
           }
+
+          const clientOrders = useOrderStore.getState().allOrders;
+          const map = new Map<string, any>();
+          for (const o of [...serverOrders, ...clientOrders]) {
+            if (o && o.orderId) {
+              map.set(o.orderId, o);
+            }
+          }
+          const allMerged = Array.from(map.values());
+          const matched = allMerged.filter((o) => {
+            const orderEmail = (o.userEmail || "").trim().toLowerCase();
+            const orderPhone = (o.phone || "").trim().replace(/\D/g, "");
+            const emailMatch = Boolean(userEmailClean && orderEmail === userEmailClean);
+            const phoneMatch = Boolean(userPhoneClean && orderPhone && orderPhone === userPhoneClean);
+            return emailMatch || phoneMatch;
+          });
+          setUserOrders(matched);
         } catch (err) {
           console.error("Failed to fetch user orders:", err);
         }
