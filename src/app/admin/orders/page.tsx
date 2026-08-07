@@ -38,57 +38,43 @@ const STATUS_STYLES: Record<string, string> = {
   CANCELLED: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
-import { useOrderStore } from "@/lib/orderStore";
-
 export default function OrdersManagement() {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState("ALL");
   const [search, setSearch] = useState("");
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
-  const fetchOrders = useCallback(async () => {
+  const fetchOrders = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    else setRefreshing(true);
     try {
-      let serverOrders: OrderRecord[] = [];
-      try {
-        const res = await fetch("/api/orders", { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          serverOrders = data.orders ?? [];
-        }
-      } catch (e) {
-        console.warn("Could not reach /api/orders, using persistent order store:", e);
+      const res = await fetch("/api/orders", {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setOrders(data.orders ?? []);
       }
-
-      const clientOrders = useOrderStore.getState().allOrders;
-      const map = new Map<string, OrderRecord>();
-      for (const o of [...serverOrders, ...clientOrders]) {
-        if (o && o.orderId) {
-          map.set(o.orderId, o as OrderRecord);
-        }
-      }
-
-      const merged = Array.from(map.values()).sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
-      setOrders(merged);
+    } catch (err) {
+      console.error("Failed to load orders:", err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
-  // Auto-refresh every 10 seconds
+  // Auto-refresh every 5 seconds for live cross-device updates
   useEffect(() => {
-    const interval = setInterval(() => fetchOrders(), 10000);
+    const interval = setInterval(() => fetchOrders(true), 5000);
     return () => clearInterval(interval);
   }, [fetchOrders]);
 
   const handleStatusChange = async (orderId: string, status: string) => {
-    // Update local client store
-    useOrderStore.getState().updateOrderStatus(orderId, status as OrderRecord["status"]);
-
     // Optimistic UI update
     setOrders((prev) =>
       prev.map((o) => (o.orderId === orderId ? { ...o, status: status as OrderRecord["status"] } : o))
@@ -125,10 +111,10 @@ export default function OrdersManagement() {
           </p>
         </div>
         <button
-          onClick={() => { setLoading(true); fetchOrders(); }}
+          onClick={() => fetchOrders(false)}
           className="flex items-center gap-2 self-start sm:self-auto text-xs font-bold text-neutral-600 hover:text-neutral-900 bg-white border border-neutral-200 px-4 py-2 rounded-xl transition-all hover:shadow-sm"
         >
-          <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+          <RefreshCw size={13} className={(loading || refreshing) ? "animate-spin" : ""} />
           Refresh
         </button>
       </div>

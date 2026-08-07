@@ -23,7 +23,23 @@ import {
   ShoppingBag,
 } from "lucide-react";
 import { useAuthStore } from "@/lib/authStore";
-import { useOrderStore, OrderRecord } from "@/lib/orderStore";
+
+interface OrderRecord {
+  orderId: string;
+  userEmail: string;
+  fullName: string;
+  phone: string;
+  district: string;
+  address: string;
+  deliveryDate?: string;
+  notes?: string;
+  items: { id: string; name: string; price: number; quantity: number; size?: string }[];
+  subtotal: number;
+  delivery: number;
+  total: number;
+  status: "PENDING" | "CONFIRMED" | "SHIPPED" | "DELIVERED" | "CANCELLED";
+  date: string;
+}
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -62,33 +78,22 @@ export default function ProfilePage() {
 
       const loadUserOrders = async () => {
         try {
-          let serverOrders: any[] = [];
-          try {
-            const res = await fetch("/api/orders", { cache: "no-store" });
-            if (res.ok) {
-              const data = await res.json();
-              serverOrders = data.orders ?? [];
-            }
-          } catch (err) {
-            console.warn("Could not fetch /api/orders:", err);
-          }
-
-          const clientOrders = useOrderStore.getState().allOrders;
-          const map = new Map<string, any>();
-          for (const o of [...serverOrders, ...clientOrders]) {
-            if (o && o.orderId) {
-              map.set(o.orderId, o);
-            }
-          }
-          const allMerged = Array.from(map.values());
-          const matched = allMerged.filter((o) => {
-            const orderEmail = (o.userEmail || "").trim().toLowerCase();
-            const orderPhone = (o.phone || "").trim().replace(/\D/g, "");
-            const emailMatch = Boolean(userEmailClean && orderEmail === userEmailClean);
-            const phoneMatch = Boolean(userPhoneClean && orderPhone && orderPhone === userPhoneClean);
-            return emailMatch || phoneMatch;
+          const res = await fetch("/api/orders", {
+            cache: "no-store",
+            headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
           });
-          setUserOrders(matched);
+          if (res.ok) {
+            const data = await res.json();
+            const allOrders: any[] = data.orders ?? [];
+            const matched = allOrders.filter((o) => {
+              const orderEmail = (o.userEmail || "").trim().toLowerCase();
+              const orderPhone = (o.phone || "").trim().replace(/\D/g, "");
+              const emailMatch = Boolean(userEmailClean && orderEmail === userEmailClean);
+              const phoneMatch = Boolean(userPhoneClean && orderPhone && orderPhone === userPhoneClean);
+              return emailMatch || phoneMatch;
+            });
+            setUserOrders(matched);
+          }
         } catch (err) {
           console.error("Failed to fetch user orders:", err);
         }

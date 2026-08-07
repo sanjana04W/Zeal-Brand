@@ -11,7 +11,7 @@ import {
   AlertTriangle,
   TrendingUp
 } from "lucide-react";
-import { useOrderStore } from "@/lib/orderStore";
+
 
 export default function AdminDashboard() {
   const [allOrders, setAllOrders] = useState<any[]>([]);
@@ -23,36 +23,23 @@ export default function AdminDashboard() {
     setMounted(true);
     async function loadData() {
       try {
-        let serverOrders: any[] = [];
-        try {
-          const ordersRes = await fetch("/api/orders", { cache: "no-store" });
-          if (ordersRes.ok) {
-            const ordersData = await ordersRes.json();
-            serverOrders = ordersData.orders || [];
-          }
-        } catch (e) {
-          console.warn("Could not fetch /api/orders:", e);
+        const [ordersRes, productsRes] = await Promise.all([
+          fetch("/api/orders", {
+            cache: "no-store",
+            headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
+          }),
+          fetch("/api/products", { cache: "no-store" }),
+        ]);
+
+        if (ordersRes.ok) {
+          const ordersData = await ordersRes.json();
+          setAllOrders(ordersData.orders || []);
         }
 
-        const clientOrders = useOrderStore.getState().allOrders;
-        const map = new Map<string, any>();
-        for (const o of [...serverOrders, ...clientOrders]) {
-          if (o && o.orderId) {
-            map.set(o.orderId, o);
-          }
+        if (productsRes.ok) {
+          const productsData = await productsRes.json();
+          setProducts(productsData || []);
         }
-        const mergedOrders = Array.from(map.values()).sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
-        setAllOrders(mergedOrders);
-
-        try {
-          const productsRes = await fetch("/api/products", { cache: "no-store" });
-          if (productsRes.ok) {
-            const productsData = await productsRes.json();
-            setProducts(productsData || []);
-          }
-        } catch { /* ignore */ }
       } catch (err) {
         console.error("Failed to load admin dashboard data:", err);
       } finally {
