@@ -62,6 +62,7 @@ export default function ProfilePage() {
 
       const loadUserOrders = async () => {
         try {
+          // Step 1: Fetch server orders (single source of truth)
           let serverOrders: any[] = [];
           try {
             const res = await fetch("/api/orders", { cache: "no-store" });
@@ -73,14 +74,36 @@ export default function ProfilePage() {
             console.warn("Could not fetch /api/orders:", err);
           }
 
+          // Step 2: Sync any client-only orders to server
           const clientOrders = useOrderStore.getState().allOrders;
+          const serverIds = new Set(serverOrders.map((o: any) => o.orderId));
+          for (const co of clientOrders) {
+            if (co && co.orderId && !serverIds.has(co.orderId)) {
+              // This order only exists in this browser's localStorage — push it to server
+              try {
+                await fetch("/api/orders", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(co),
+                });
+                serverOrders.push(co);
+              } catch {
+                // If sync fails, still include it locally
+                serverOrders.push(co);
+              }
+            }
+          }
+
+          // Step 3: Deduplicate by orderId (server is truth)
           const map = new Map<string, any>();
-          for (const o of [...serverOrders, ...clientOrders]) {
+          for (const o of serverOrders) {
             if (o && o.orderId) {
               map.set(o.orderId, o);
             }
           }
           const allMerged = Array.from(map.values());
+
+          // Step 4: Filter by user email/phone
           const matched = allMerged.filter((o) => {
             const orderEmail = (o.userEmail || "").trim().toLowerCase();
             const orderPhone = (o.phone || "").trim().replace(/\D/g, "");

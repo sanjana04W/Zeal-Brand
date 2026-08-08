@@ -61,8 +61,24 @@ export default function OrdersManagement() {
       }
 
       const clientOrders = useOrderStore.getState().allOrders;
+      const serverIds = new Set(serverOrders.map((o) => o.orderId));
+      for (const co of clientOrders) {
+        if (co && co.orderId && !serverIds.has(co.orderId)) {
+          try {
+            await fetch("/api/orders", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(co),
+            });
+            serverOrders.push(co);
+          } catch {
+            serverOrders.push(co);
+          }
+        }
+      }
+
       const map = new Map<string, OrderRecord>();
-      for (const o of [...serverOrders, ...clientOrders]) {
+      for (const o of serverOrders) {
         if (o && o.orderId) {
           map.set(o.orderId, o as OrderRecord);
         }
