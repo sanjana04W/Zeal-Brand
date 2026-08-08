@@ -98,6 +98,7 @@ export default function MessagesManagement() {
       );
       // Reset filter to show updated message
       setFilterTab("All");
+      if (window.innerWidth < 640) setShowDetail(false);
     }
   };
 
@@ -118,6 +119,7 @@ export default function MessagesManagement() {
     setReplyText("");
     // Reset filter to show updated message
     setFilterTab("All");
+    if (window.innerWidth < 640) setShowDetail(false);
   };
 
   const unreadCount = messages.filter((m) => m.status === "Unread").length;
