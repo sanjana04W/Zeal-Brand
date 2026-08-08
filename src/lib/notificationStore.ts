@@ -16,24 +16,15 @@ interface NotificationStore {
   notifications: AdminNotification[];
   addNotification: (notif: Omit<AdminNotification, "id" | "date" | "read">) => void;
   dismissNotification: (id: string) => void;
+  markAsRead: (id: string) => void;
+  dismissByType: (type: "ORDER" | "MESSAGE") => void;
   dismissAll: () => void;
 }
 
 export const useNotificationStore = create<NotificationStore>()(
   persist(
     (set) => ({
-      notifications: [
-        {
-          id: "notif-demo-1",
-          type: "ORDER",
-          title: "New Order Placed",
-          subtitle: "ZB-10003",
-          detail: "wenuri sanjana placed an order for Rs. 3,950",
-          link: "/admin/orders",
-          date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          read: false,
-        },
-      ],
+      notifications: [],
 
       addNotification: (notif) =>
         set((state) => ({
@@ -53,11 +44,23 @@ export const useNotificationStore = create<NotificationStore>()(
           notifications: state.notifications.filter((n) => n.id !== id),
         })),
 
+      markAsRead: (id) =>
+        set((state) => ({
+          notifications: state.notifications.map((n) =>
+            n.id === id ? { ...n, read: true } : n
+          ),
+        })),
+
+      dismissByType: (type) =>
+        set((state) => ({
+          notifications: state.notifications.filter((n) => n.type !== type),
+        })),
+
       dismissAll: () =>
         set(() => ({
           notifications: [],
         })),
     }),
-    { name: "zeal-admin-notifications" }
+    { name: "zeal-admin-notifications-v3" }
   )
 );

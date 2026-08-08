@@ -16,6 +16,7 @@ interface Message {
 }
 
 import { useMessageStore } from "@/lib/messageStoreClient";
+import { useNotificationStore } from "@/lib/notificationStore";
 
 export default function MessagesManagement() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -30,6 +31,7 @@ export default function MessagesManagement() {
   const [filterTab, setFilterTab] = useState<"All" | "Unread" | "Read" | "Replied">("All");
 
   const { messages: localMessages, updateMessageStatus } = useMessageStore();
+  const { dismissByType } = useNotificationStore();
 
   const fetchMessages = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -98,6 +100,11 @@ export default function MessagesManagement() {
       );
       // Reset filter to show updated message
       setFilterTab("All");
+      // Dismiss message notifications from header bar
+      const remainingUnread = messages.filter((m) => m.id !== msg.id && m.status === "Unread").length;
+      if (remainingUnread === 0) {
+        dismissByType("MESSAGE");
+      }
       if (window.innerWidth < 640) setShowDetail(false);
     }
   };
@@ -119,6 +126,10 @@ export default function MessagesManagement() {
     setReplyText("");
     // Reset filter to show updated message
     setFilterTab("All");
+    const remainingUnread = messages.filter((m) => m.id !== selectedMessage.id && m.status === "Unread").length;
+    if (remainingUnread === 0) {
+      dismissByType("MESSAGE");
+    }
     if (window.innerWidth < 640) setShowDetail(false);
   };
 

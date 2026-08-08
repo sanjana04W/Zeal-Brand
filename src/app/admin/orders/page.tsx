@@ -39,6 +39,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 import { useOrderStore } from "@/lib/orderStore";
+import { useNotificationStore } from "@/lib/notificationStore";
 
 export default function OrdersManagement() {
   const [orders, setOrders] = useState<OrderRecord[]>([]);
@@ -101,14 +102,22 @@ export default function OrdersManagement() {
     return () => clearInterval(interval);
   }, [fetchOrders]);
 
+  const { dismissByType } = useNotificationStore();
+
   const handleStatusChange = async (orderId: string, status: string) => {
     // Update local client store
     useOrderStore.getState().updateOrderStatus(orderId, status as OrderRecord["status"]);
 
     // Optimistic UI update
-    setOrders((prev) =>
-      prev.map((o) => (o.orderId === orderId ? { ...o, status: status as OrderRecord["status"] } : o))
-    );
+    setOrders((prev) => {
+      const updated = prev.map((o) => (o.orderId === orderId ? { ...o, status: status as OrderRecord["status"] } : o));
+      const remainingPending = updated.filter((o) => o.status === "PENDING").length;
+      if (remainingPending === 0) {
+        dismissByType("ORDER");
+      }
+      return updated;
+    });
+
     await fetch("/api/orders", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

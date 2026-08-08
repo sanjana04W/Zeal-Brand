@@ -50,13 +50,14 @@ export default function AdminLayout({
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { notifications, dismissNotification, dismissAll } = useNotificationStore();
+  const { notifications, dismissNotification, dismissByType, dismissAll } = useNotificationStore();
   const notifRef = useRef<HTMLDivElement>(null);
 
   const [pendingOrderCount, setPendingOrderCount] = useState(0);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
-  const unreadCount = notifications.length + unreadMessageCount;
+  // Unread notification count for the Bell icon
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   // Fetch live counts for pending orders and unread messages
   useEffect(() => {
@@ -69,19 +70,27 @@ export default function AdminLayout({
 
         if (ordersRes.ok) {
           const ordersData = await ordersRes.json();
-          setPendingOrderCount(ordersData.pendingCount ?? 0);
+          const pending = ordersData.pendingCount ?? 0;
+          setPendingOrderCount(pending);
+          if (pending === 0) {
+            dismissByType("ORDER");
+          }
         }
 
         if (msgsRes.ok) {
           const msgsData = await msgsRes.json();
-          setUnreadMessageCount(msgsData.unreadCount ?? 0);
+          const unreadMsgs = msgsData.unreadCount ?? 0;
+          setUnreadMessageCount(unreadMsgs);
+          if (unreadMsgs === 0) {
+            dismissByType("MESSAGE");
+          }
         }
       } catch { /* ignore */ }
     };
     fetchCounts();
     const interval = setInterval(fetchCounts, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [dismissByType]);
 
   // Load persisted role from localStorage on mount
   useEffect(() => {
