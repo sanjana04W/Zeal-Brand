@@ -16,7 +16,6 @@ interface Message {
 }
 
 import { useMessageStore } from "@/lib/messageStoreClient";
-import { useNotificationStore } from "@/lib/notificationStore";
 
 export default function MessagesManagement() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -31,7 +30,6 @@ export default function MessagesManagement() {
   const [filterTab, setFilterTab] = useState<"All" | "Unread" | "Read" | "Replied">("All");
 
   const { messages: localMessages, updateMessageStatus } = useMessageStore();
-  const { dismissByType } = useNotificationStore();
 
   const fetchMessages = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -101,22 +99,18 @@ export default function MessagesManagement() {
     setReplyText("");
     setShowDetail(true);
     if (msg.status === "Unread") {
+      // Immediately update local state
       updateMessageStatus(msg.id, "Read");
-      await fetch("/api/messages", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: msg.id, status: "Read" }),
-      });
       setMessages((prev) =>
         prev.map((m) => (m.id === msg.id ? { ...m, status: "Read" } : m))
       );
-      // Reset filter to show updated message
       setFilterTab("All");
-      // Dismiss message notifications from header bar
-      const remainingUnread = messages.filter((m) => m.id !== msg.id && m.status === "Unread").length;
-      if (remainingUnread === 0) {
-        dismissByType("MESSAGE");
-      }
+      // Persist to server
+      fetch("/api/messages", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: msg.id, status: "Read" }),
+      }).catch(() => {});
       if (window.innerWidth < 640) setShowDetail(false);
     }
   };
@@ -124,24 +118,21 @@ export default function MessagesManagement() {
   const handleSendReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!replyText.trim() || !selectedMessage) return;
+    // Immediately update local state
     updateMessageStatus(selectedMessage.id, "Replied");
-    await fetch("/api/messages", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: selectedMessage.id, status: "Replied" }),
-    });
     setMessages((prev) =>
       prev.map((m) => (m.id === selectedMessage.id ? { ...m, status: "Replied" } : m))
     );
     setSelectedMessage((prev) => (prev ? { ...prev, status: "Replied" } : null));
     setRepliedSuccess(true);
     setReplyText("");
-    // Reset filter to show updated message
     setFilterTab("All");
-    const remainingUnread = messages.filter((m) => m.id !== selectedMessage.id && m.status === "Unread").length;
-    if (remainingUnread === 0) {
-      dismissByType("MESSAGE");
-    }
+    // Persist to server
+    fetch("/api/messages", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: selectedMessage.id, status: "Replied" }),
+    }).catch(() => {});
     if (window.innerWidth < 640) setShowDetail(false);
   };
 

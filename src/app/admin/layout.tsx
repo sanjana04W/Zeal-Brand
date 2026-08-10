@@ -50,16 +50,15 @@ export default function AdminLayout({
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { notifications, dismissNotification, dismissByType, dismissAll } = useNotificationStore();
+  const { notifications, dismissNotification, dismissAll } = useNotificationStore();
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [serverPendingOrders, setServerPendingOrders] = useState<any[]>([]);
   const [serverUnreadMessages, setServerUnreadMessages] = useState<any[]>([]);
   const [pendingOrderCount, setPendingOrderCount] = useState(0);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
-  // Fetch live counts and lists for pending orders and unread messages
+  // Fetch live server data every 10s — this is the single source of truth
   useEffect(() => {
     const fetchCounts = async () => {
       try {
@@ -104,8 +103,9 @@ export default function AdminLayout({
     localStorage.setItem("zeal-admin-role", newRole);
   };
 
-  // Dynamically derive active notifications from server state + custom store
-  const allDerivedNotifications = [
+  // Notifications are PURELY derived from live server state (unread messages + pending orders)
+  // This means they automatically appear/disappear as server data changes — no stale localStorage
+  const displayNotifications: any[] = [
     ...serverUnreadMessages.map((msg) => ({
       id: `server-msg-${msg.id}`,
       type: "MESSAGE" as const,
@@ -114,7 +114,6 @@ export default function AdminLayout({
       detail: `"${(msg.message || "").slice(0, 45)}${(msg.message || "").length > 45 ? "..." : ""}"`,
       link: "/admin/messages",
       date: msg.date || "Just now",
-      read: false,
     })),
     ...serverPendingOrders.map((order) => ({
       id: `server-order-${order.orderId}`,
@@ -123,32 +122,18 @@ export default function AdminLayout({
       subtitle: order.orderId,
       detail: `${order.fullName || "Customer"} placed an order for Rs. ${(order.total || 0).toLocaleString()}`,
       link: "/admin/orders",
-      date: order.date ? new Date(order.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now",
-      read: false,
+      date: order.date ? new Date(order.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Just now",
     })),
-    ...notifications,
   ];
-
-  // Deduplicate and filter out dismissed items
-  const notifMap = new Map<string, any>();
-  for (const n of allDerivedNotifications) {
-    if (n && n.id && !dismissedIds.has(n.id) && !n.read) {
-      notifMap.set(n.id, n);
-    }
-  }
-  const displayNotifications = Array.from(notifMap.values());
   const unreadCount = displayNotifications.length;
 
-  // Dismiss (mark as read) a single notification
+  // Dismiss a notification — navigates to the relevant page (marking it read from there)
   const handleDismiss = (id: string) => {
-    setDismissedIds((prev) => new Set([...prev, id]));
     dismissNotification(id);
   };
 
-  // Dismiss all unread notifications
+  // Dismiss all — clears zustand store (server data auto-clears on next poll)
   const handleDismissAll = () => {
-    const allIds = displayNotifications.map((n) => n.id);
-    setDismissedIds((prev) => new Set([...prev, ...allIds]));
     dismissAll();
     setNotifOpen(false);
   };
