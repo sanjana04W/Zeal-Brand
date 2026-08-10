@@ -94,11 +94,24 @@ export default function ProfilePage() {
             }
           }
 
-          // Step 3: Deduplicate by orderId (server is truth)
+          // Step 3: Deduplicate by orderId with status priority
+          const getOrderStatusRank = (s?: string) => {
+            if (s === "CANCELLED" || s === "DELIVERED") return 4;
+            if (s === "SHIPPED") return 3;
+            if (s === "CONFIRMED") return 2;
+            return 1;
+          };
+
           const map = new Map<string, any>();
-          for (const o of serverOrders) {
+          for (const o of [...serverOrders, ...clientOrders]) {
             if (o && o.orderId) {
-              map.set(o.orderId, o);
+              const existing = map.get(o.orderId);
+              if (existing) {
+                const higherStatus = getOrderStatusRank(existing.status) >= getOrderStatusRank(o.status) ? existing.status : o.status;
+                map.set(o.orderId, { ...o, ...existing, status: higherStatus });
+              } else {
+                map.set(o.orderId, o);
+              }
             }
           }
           const allMerged = Array.from(map.values());

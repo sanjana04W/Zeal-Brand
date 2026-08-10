@@ -50,11 +50,23 @@ export default function MessagesManagement() {
 
       const clientStoreMessages = useMessageStore.getState().messages;
 
+      const getStatusRank = (s?: string) => {
+        if (s === "Replied") return 2;
+        if (s === "Read") return 1;
+        return 0;
+      };
+
       // Deduplicate and merge server + client messages
       const map = new Map<string, Message>();
       for (const m of [...serverMessages, ...clientStoreMessages]) {
         if (m && m.id) {
-          map.set(m.id, m as Message);
+          const existing = map.get(m.id);
+          if (existing) {
+            const higherStatus = (getStatusRank(existing.status) >= getStatusRank(m.status) ? existing.status : m.status) as Message["status"];
+            map.set(m.id, { ...m, ...existing, status: higherStatus });
+          } else {
+            map.set(m.id, m as Message);
+          }
         }
       }
 

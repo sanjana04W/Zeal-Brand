@@ -35,6 +35,14 @@ declare global {
   var __ordersCache: OrderRecord[] | undefined;
 }
 
+function getHigherOrderStatus(s1?: OrderRecord["status"], s2?: OrderRecord["status"]): OrderRecord["status"] {
+  if (s1 === "CANCELLED" || s2 === "CANCELLED") return (s1 === "CANCELLED" ? s1 : s2) as OrderRecord["status"];
+  if (s1 === "DELIVERED" || s2 === "DELIVERED") return "DELIVERED";
+  if (s1 === "SHIPPED" || s2 === "SHIPPED") return "SHIPPED";
+  if (s1 === "CONFIRMED" || s2 === "CONFIRMED") return "CONFIRMED";
+  return "PENDING";
+}
+
 function readOrders(): OrderRecord[] {
   let disk: OrderRecord[] = [];
   try {
@@ -54,7 +62,16 @@ function readOrders(): OrderRecord[] {
 
   for (const item of [...disk, ...cache]) {
     if (item && item.orderId) {
-      map.set(item.orderId, item);
+      const existing = map.get(item.orderId);
+      if (existing) {
+        map.set(item.orderId, {
+          ...item,
+          ...existing,
+          status: getHigherOrderStatus(existing.status, item.status),
+        });
+      } else {
+        map.set(item.orderId, item);
+      }
     }
   }
 

@@ -31,6 +31,12 @@ declare global {
   var __messagesCache: Message[] | undefined;
 }
 
+function getHigherMessageStatus(s1?: Message["status"], s2?: Message["status"]): Message["status"] {
+  if (s1 === "Replied" || s2 === "Replied") return "Replied";
+  if (s1 === "Read" || s2 === "Read") return "Read";
+  return "Unread";
+}
+
 function readMessages(): Message[] {
   let disk: Message[] = [];
   try {
@@ -50,7 +56,16 @@ function readMessages(): Message[] {
 
   for (const item of [...disk, ...cache]) {
     if (item && item.id) {
-      map.set(item.id, item);
+      const existing = map.get(item.id);
+      if (existing) {
+        map.set(item.id, {
+          ...item,
+          ...existing,
+          status: getHigherMessageStatus(existing.status, item.status),
+        });
+      } else {
+        map.set(item.id, item);
+      }
     }
   }
 

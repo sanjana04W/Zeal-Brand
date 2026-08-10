@@ -53,13 +53,13 @@ export default function AdminLayout({
   const { notifications, dismissNotification, dismissByType, dismissAll } = useNotificationStore();
   const notifRef = useRef<HTMLDivElement>(null);
 
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [serverPendingOrders, setServerPendingOrders] = useState<any[]>([]);
+  const [serverUnreadMessages, setServerUnreadMessages] = useState<any[]>([]);
   const [pendingOrderCount, setPendingOrderCount] = useState(0);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
-  // Unread notification count for the Bell icon
-  const unreadCount = notifications.filter((n) => !n.read).length;
-
-  // Fetch live counts for pending orders and unread messages
+  // Fetch live counts and lists for pending orders and unread messages
   useEffect(() => {
     const fetchCounts = async () => {
       try {
@@ -70,27 +70,25 @@ export default function AdminLayout({
 
         if (ordersRes.ok) {
           const ordersData = await ordersRes.json();
-          const pending = ordersData.pendingCount ?? 0;
-          setPendingOrderCount(pending);
-          if (pending === 0) {
-            dismissByType("ORDER");
-          }
+          const allOrders = ordersData.orders ?? [];
+          const pending = allOrders.filter((o: any) => o.status === "PENDING");
+          setPendingOrderCount(pending.length);
+          setServerPendingOrders(pending);
         }
 
         if (msgsRes.ok) {
           const msgsData = await msgsRes.json();
-          const unreadMsgs = msgsData.unreadCount ?? 0;
-          setUnreadMessageCount(unreadMsgs);
-          if (unreadMsgs === 0) {
-            dismissByType("MESSAGE");
-          }
+          const allMsgs = msgsData.messages ?? [];
+          const unreadMsgs = allMsgs.filter((m: any) => m.status === "Unread");
+          setUnreadMessageCount(unreadMsgs.length);
+          setServerUnreadMessages(unreadMsgs);
         }
       } catch { /* ignore */ }
     };
     fetchCounts();
     const interval = setInterval(fetchCounts, 10000);
     return () => clearInterval(interval);
-  }, [dismissByType]);
+  }, []);
 
   // Load persisted role from localStorage on mount
   useEffect(() => {
@@ -106,24 +104,51 @@ export default function AdminLayout({
     localStorage.setItem("zeal-admin-role", newRole);
   };
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
-        setNotifOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  // Dynamically derive active notifications from server state + custom store
+  const allDerivedNotifications = [
+    ...serverUnreadMessages.map((msg) => ({
+      id: `server-msg-${msg.id}`,
+      type: "MESSAGE" as const,
+      title: "New Contact Message",
+      subtitle: msg.name || "Customer Inquiry",
+      detail: `"${(msg.message || "").slice(0, 45)}${(msg.message || "").length > 45 ? "..." : ""}"`,
+      link: "/admin/messages",
+      date: msg.date || "Just now",
+      read: false,
+    })),
+    ...serverPendingOrders.map((order) => ({
+      id: `server-order-${order.orderId}`,
+      type: "ORDER" as const,
+      title: "New Order Placed",
+      subtitle: order.orderId,
+      detail: `${order.fullName || "Customer"} placed an order for Rs. ${(order.total || 0).toLocaleString()}`,
+      link: "/admin/orders",
+      date: order.date ? new Date(order.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now",
+      read: false,
+    })),
+    ...notifications,
+  ];
+
+  // Deduplicate and filter out dismissed items
+  const notifMap = new Map<string, any>();
+  for (const n of allDerivedNotifications) {
+    if (n && n.id && !dismissedIds.has(n.id) && !n.read) {
+      notifMap.set(n.id, n);
+    }
+  }
+  const displayNotifications = Array.from(notifMap.values());
+  const unreadCount = displayNotifications.length;
 
   // Dismiss (mark as read) a single notification
   const handleDismiss = (id: string) => {
+    setDismissedIds((prev) => new Set([...prev, id]));
     dismissNotification(id);
   };
 
   // Dismiss all unread notifications
   const handleDismissAll = () => {
+    const allIds = displayNotifications.map((n) => n.id);
+    setDismissedIds((prev) => new Set([...prev, ...allIds]));
     dismissAll();
     setNotifOpen(false);
   };
@@ -274,7 +299,7 @@ export default function AdminLayout({
                       <p className="text-xs mt-1">No unread notifications.</p>
                     </div>
                   ) : (
-                    notifications.map((notif) => (
+                    displayNotifications.map((notif) => (
                       <div
                         key={notif.id}
                         className="flex items-start gap-3 px-4 py-3.5 hover:bg-neutral-50 transition-colors group"

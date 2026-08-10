@@ -78,10 +78,23 @@ export default function OrdersManagement() {
         }
       }
 
+      const getOrderStatusRank = (s?: string) => {
+        if (s === "CANCELLED" || s === "DELIVERED") return 4;
+        if (s === "SHIPPED") return 3;
+        if (s === "CONFIRMED") return 2;
+        return 1;
+      };
+
       const map = new Map<string, OrderRecord>();
-      for (const o of serverOrders) {
+      for (const o of [...serverOrders, ...clientOrders]) {
         if (o && o.orderId) {
-          map.set(o.orderId, o as OrderRecord);
+          const existing = map.get(o.orderId);
+          if (existing) {
+            const higherStatus = (getOrderStatusRank(existing.status) >= getOrderStatusRank(o.status) ? existing.status : o.status) as OrderRecord["status"];
+            map.set(o.orderId, { ...o, ...existing, status: higherStatus });
+          } else {
+            map.set(o.orderId, o as OrderRecord);
+          }
         }
       }
 
