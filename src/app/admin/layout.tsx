@@ -50,10 +50,18 @@ export default function AdminLayout({
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { notifications, dismissNotification, dismissByType, dismissAll } = useNotificationStore();
+  const {
+    notifications,
+    dismissedIds: persistedDismissedIds,
+    readMessageIds,
+    dismissNotification,
+    dismissAll,
+    addDismissedId,
+    addDismissedIds,
+    addReadMessageId,
+  } = useNotificationStore();
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [serverPendingOrders, setServerPendingOrders] = useState<any[]>([]);
   const [serverUnreadMessages, setServerUnreadMessages] = useState<any[]>([]);
   const [pendingOrderCount, setPendingOrderCount] = useState(0);
@@ -79,7 +87,10 @@ export default function AdminLayout({
         if (msgsRes.ok) {
           const msgsData = await msgsRes.json();
           const allMsgs = msgsData.messages ?? [];
-          const unreadMsgs = allMsgs.filter((m: any) => m.status === "Unread");
+          // Filter out messages that have been marked read on the server OR locally
+          const unreadMsgs = allMsgs.filter(
+            (m: any) => m.status === "Unread" && !readMessageIds.includes(m.id)
+          );
           setUnreadMessageCount(unreadMsgs.length);
           setServerUnreadMessages(unreadMsgs);
         }
@@ -88,7 +99,7 @@ export default function AdminLayout({
     fetchCounts();
     const interval = setInterval(fetchCounts, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [readMessageIds]);
 
   // Load persisted role from localStorage on mount
   useEffect(() => {
@@ -104,51 +115,90 @@ export default function AdminLayout({
     localStorage.setItem("zeal-admin-role", newRole);
   };
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // Dynamically derive active notifications from server state + custom store
+  // Use persisted dismissedIds so dismissed notifications don't reappear on refresh
+  const dismissedSet = new Set(persistedDismissedIds);
+
   const allDerivedNotifications = [
-    ...serverUnreadMessages.map((msg) => ({
-      id: `server-msg-${msg.id}`,
-      type: "MESSAGE" as const,
-      title: "New Contact Message",
-      subtitle: msg.name || "Customer Inquiry",
-      detail: `"${(msg.message || "").slice(0, 45)}${(msg.message || "").length > 45 ? "..." : ""}"`,
-      link: "/admin/messages",
-      date: msg.date || "Just now",
-      read: false,
-    })),
-    ...serverPendingOrders.map((order) => ({
-      id: `server-order-${order.orderId}`,
-      type: "ORDER" as const,
-      title: "New Order Placed",
-      subtitle: order.orderId,
-      detail: `${order.fullName || "Customer"} placed an order for Rs. ${(order.total || 0).toLocaleString()}`,
-      link: "/admin/orders",
-      date: order.date ? new Date(order.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now",
-      read: false,
-    })),
-    ...notifications,
+    ...serverUnreadMessages
+      .filter((msg) => !dismissedSet.has(`server-msg-${msg.id}`))
+      .map((msg) => ({
+        id: `server-msg-${msg.id}`,
+        type: "MESSAGE" as const,
+        title: "New Contact Message",
+        subtitle: msg.name || "Customer Inquiry",
+        detail: `"${(msg.message || "").slice(0, 45)}${(msg.message || "").length > 45 ? "..." : ""}"`,
+        link: "/admin/messages",
+        date: msg.date || "Just now",
+        read: false,
+      })),
+    ...serverPendingOrders
+      .filter((order) => !dismissedSet.has(`server-order-${order.orderId}`))
+      .map((order) => ({
+        id: `server-order-${order.orderId}`,
+        type: "ORDER" as const,
+        title: "New Order Placed",
+        subtitle: order.orderId,
+        detail: `${order.fullName || "Customer"} placed an order for Rs. ${(order.total || 0).toLocaleString()}`,
+        link: "/admin/orders",
+        date: order.date ? new Date(order.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Just now",
+        read: false,
+      })),
+    ...notifications.filter((n) => !n.read && !dismissedSet.has(n.id)),
   ];
 
-  // Deduplicate and filter out dismissed items
+  // Deduplicate
   const notifMap = new Map<string, any>();
   for (const n of allDerivedNotifications) {
-    if (n && n.id && !dismissedIds.has(n.id) && !n.read) {
-      notifMap.set(n.id, n);
-    }
+    if (n && n.id) notifMap.set(n.id, n);
   }
   const displayNotifications = Array.from(notifMap.values());
   const unreadCount = displayNotifications.length;
 
-  // Dismiss (mark as read) a single notification
+  // Dismiss (remove) a single notification — persisted so it doesn't come back
   const handleDismiss = (id: string) => {
-    setDismissedIds((prev) => new Set([...prev, id]));
+    addDismissedId(id);
     dismissNotification(id);
+    // If it's a message notification, also track the message as read
+    if (id.startsWith("server-msg-")) {
+      const msgId = id.replace("server-msg-", "");
+      addReadMessageId(msgId);
+      // Also update server status
+      fetch("/api/messages", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: msgId, status: "Read" }),
+      }).catch(() => {});
+    }
   };
 
-  // Dismiss all unread notifications
+  // Dismiss all unread notifications — persisted
   const handleDismissAll = () => {
     const allIds = displayNotifications.map((n) => n.id);
-    setDismissedIds((prev) => new Set([...prev, ...allIds]));
+    addDismissedIds(allIds);
+    // Mark all message notifications as read on server
+    for (const n of displayNotifications) {
+      if (n.id.startsWith("server-msg-")) {
+        const msgId = n.id.replace("server-msg-", "");
+        addReadMessageId(msgId);
+        fetch("/api/messages", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: msgId, status: "Read" }),
+        }).catch(() => {});
+      }
+    }
     dismissAll();
     setNotifOpen(false);
   };

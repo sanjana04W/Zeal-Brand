@@ -31,7 +31,7 @@ export default function MessagesManagement() {
   const [filterTab, setFilterTab] = useState<"All" | "Unread" | "Read" | "Replied">("All");
 
   const { messages: localMessages, updateMessageStatus } = useMessageStore();
-  const { dismissByType } = useNotificationStore();
+  const { dismissByType, readMessageIds, addReadMessageId } = useNotificationStore();
 
   const fetchMessages = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -70,7 +70,13 @@ export default function MessagesManagement() {
         }
       }
 
-      const merged = Array.from(map.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      const merged = Array.from(map.values()).map((m) => {
+        if (readMessageIds.includes(m.id)) {
+          return { ...m, status: m.status === "Unread" ? "Read" : m.status } as Message;
+        }
+        return m as Message;
+      }).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
       setMessages(merged);
       setLastRefreshed(new Date());
       setSelectedMessage((prev) => {
@@ -83,7 +89,7 @@ export default function MessagesManagement() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [readMessageIds]);
 
   useEffect(() => {
     fetchMessages();
@@ -100,6 +106,10 @@ export default function MessagesManagement() {
     setRepliedSuccess(false);
     setReplyText("");
     setShowDetail(true);
+    
+    // Track read locally so it persists
+    addReadMessageId(msg.id);
+
     if (msg.status === "Unread") {
       updateMessageStatus(msg.id, "Read");
       await fetch("/api/messages", {
@@ -113,7 +123,7 @@ export default function MessagesManagement() {
       // Reset filter to show updated message
       setFilterTab("All");
       // Dismiss message notifications from header bar
-      const remainingUnread = messages.filter((m) => m.id !== msg.id && m.status === "Unread").length;
+      const remainingUnread = messages.filter((m) => m.id !== msg.id && m.status === "Unread" && !readMessageIds.includes(m.id)).length;
       if (remainingUnread === 0) {
         dismissByType("MESSAGE");
       }
@@ -124,6 +134,10 @@ export default function MessagesManagement() {
   const handleSendReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!replyText.trim() || !selectedMessage) return;
+
+    // Track read locally so it persists
+    addReadMessageId(selectedMessage.id);
+
     updateMessageStatus(selectedMessage.id, "Replied");
     await fetch("/api/messages", {
       method: "PATCH",
@@ -138,14 +152,14 @@ export default function MessagesManagement() {
     setReplyText("");
     // Reset filter to show updated message
     setFilterTab("All");
-    const remainingUnread = messages.filter((m) => m.id !== selectedMessage.id && m.status === "Unread").length;
+    const remainingUnread = messages.filter((m) => m.id !== selectedMessage.id && m.status === "Unread" && !readMessageIds.includes(m.id)).length;
     if (remainingUnread === 0) {
       dismissByType("MESSAGE");
     }
     if (window.innerWidth < 640) setShowDetail(false);
   };
 
-  const unreadCount = messages.filter((m) => m.status === "Unread").length;
+  const unreadCount = messages.filter((m) => m.status === "Unread" && !readMessageIds.includes(m.id)).length;
 
   const filteredMessages = messages.filter((m) => {
     const matchesFilter = filterTab === "All" || m.status === filterTab;
