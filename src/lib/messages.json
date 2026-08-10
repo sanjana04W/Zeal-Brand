@@ -6,7 +6,7 @@
     "subject": "Test Subject",
     "message": "Hello test",
     "id": "M-1786123440254",
-    "status": "Read",
+    "status": "Unread",
     "createdAt": 1786123440254,
     "date": "07 Aug 2026, 22:54"
   },
@@ -17,7 +17,7 @@
     "phone": "0701442569",
     "subject": "order inquery",
     "message": "Hello test message",
-    "status": "Read",
+    "status": "Unread",
     "createdAt": 1786118390533,
     "date": "07 Aug 2026, 21:29"
   },
