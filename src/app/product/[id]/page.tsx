@@ -30,29 +30,18 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
           const firstAvailable = SIZES.find((s) => sizeStock[s] !== false) || "L";
           setSelectedSize(firstAvailable);
 
-          // Get related products by subCategory first; fallback to mainCategory if fewer than 4
-          const subCatRelated = products.filter(
-            (p: any) =>
-              p.subCategory &&
-              found.subCategory &&
-              p.subCategory === found.subCategory &&
-              String(p.id) !== String(found.id)
-          );
+          // Strictly match same mainCategory + subCategory (prevents cross-gender mixing).
+          // Show 2–4 products; hide section entirely if fewer than 2 matches.
+          const related = products
+            .filter(
+              (p: any) =>
+                p.mainCategory === found.mainCategory &&
+                p.subCategory === found.subCategory &&
+                String(p.id) !== String(found.id)
+            )
+            .slice(0, 4);
 
-          const related =
-            subCatRelated.length >= 4
-              ? subCatRelated.slice(0, 4)
-              : [
-                  ...subCatRelated,
-                  ...products.filter(
-                    (p: any) =>
-                      p.mainCategory === found.mainCategory &&
-                      p.subCategory !== found.subCategory &&
-                      String(p.id) !== String(found.id)
-                  ),
-                ].slice(0, 4);
-
-          setRelatedProducts(related);
+          setRelatedProducts(related.length >= 2 ? related : []);
         } else {
           setProduct(null);
         }
