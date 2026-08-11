@@ -15,6 +15,7 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
   const [loading, setLoading] = useState(true);
   const [selectedSize, setSelectedSize] = useState<string>("L");
   const [quantity, setQuantity] = useState(1);
+  const [relatedProducts, setRelatedProducts] = useState<any[]>([]);
   const { addItem } = useCartStore();
 
   useEffect(() => {
@@ -28,6 +29,12 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
           const sizeStock = found.sizeStock || { S: true, M: true, L: true, XL: true, XXL: true };
           const firstAvailable = SIZES.find((s) => sizeStock[s] !== false) || "L";
           setSelectedSize(firstAvailable);
+
+          // Get related products (same mainCategory, excluding current product, limit to 4)
+          const related = products
+            .filter((p: any) => p.mainCategory === found.mainCategory && String(p.id) !== String(found.id))
+            .slice(0, 4);
+          setRelatedProducts(related);
         } else {
           setProduct(null);
         }
@@ -262,6 +269,55 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
           </div>
         </div>
       </div>
+
+      {/* Related Products: You May Also Like */}
+      {relatedProducts.length > 0 && (
+        <div className="mt-16 sm:mt-24 pt-12 border-t border-border">
+          <h2 className="text-xl sm:text-2xl font-serif text-foreground mb-8">You May Also Like</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
+            {relatedProducts.map((p) => (
+              <Link
+                href={`/product/${p.id}`}
+                key={p.id}
+                className="group flex flex-col cursor-pointer border border-border rounded-lg overflow-hidden bg-background shadow-sm hover:shadow-md transition-shadow"
+              >
+                <div className="relative aspect-[3/4] bg-neutral-100 overflow-hidden">
+                  {p.badge && (
+                    <div className="absolute top-2 left-2 z-10">
+                      <span className="bg-red-600 text-white text-[9px] font-bold px-2 py-0.5 rounded uppercase">
+                        {p.badge}
+                      </span>
+                    </div>
+                  )}
+                  <Image
+                    src={p.image}
+                    alt={p.name}
+                    fill
+                    unoptimized
+                    className="object-cover group-hover:scale-105 transition-transform duration-700 ease-in-out"
+                  />
+                </div>
+                <div className="flex flex-col flex-1 p-3">
+                  <p className="text-[9px] text-muted-foreground uppercase tracking-widest mb-0.5 truncate">
+                    {p.mainCategory}
+                  </p>
+                  <h3 className="text-[11px] sm:text-xs font-medium leading-tight mb-2 group-hover:text-neutral-600 transition-colors line-clamp-2">
+                    {p.name}
+                  </h3>
+                  <div className="mt-auto flex items-center gap-1.5 flex-wrap">
+                    <span className="font-bold text-foreground text-xs">Rs. {p.price.toLocaleString()}</span>
+                    {p.originalPrice && (
+                      <span className="text-[10px] text-muted-foreground line-through">
+                        Rs. {p.originalPrice.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
