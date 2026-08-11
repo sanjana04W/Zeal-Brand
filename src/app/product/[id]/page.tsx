@@ -30,26 +30,29 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
           const firstAvailable = SIZES.find((s) => sizeStock[s] !== false) || "L";
           setSelectedSize(firstAvailable);
 
-          // Get related products (primarily same subCategory, fallback to mainCategory, limit to 4)
-          let related = products.filter(
-            (p: any) => 
-              p.subCategory && 
-              found.subCategory && 
-              p.subCategory === found.subCategory && 
+          // Get related products by subCategory first; fallback to mainCategory if fewer than 4
+          const subCatRelated = products.filter(
+            (p: any) =>
+              p.subCategory &&
+              found.subCategory &&
+              p.subCategory === found.subCategory &&
               String(p.id) !== String(found.id)
           );
 
-          if (related.length < 4) {
-            const mainRelated = products.filter(
-              (p: any) => 
-                p.mainCategory === found.mainCategory && 
-                String(p.id) !== String(found.id) &&
-                !related.some((r: any) => String(r.id) === String(p.id))
-            );
-            related = [...related, ...mainRelated];
-          }
+          const related =
+            subCatRelated.length >= 4
+              ? subCatRelated.slice(0, 4)
+              : [
+                  ...subCatRelated,
+                  ...products.filter(
+                    (p: any) =>
+                      p.mainCategory === found.mainCategory &&
+                      p.subCategory !== found.subCategory &&
+                      String(p.id) !== String(found.id)
+                  ),
+                ].slice(0, 4);
 
-          setRelatedProducts(related.slice(0, 4));
+          setRelatedProducts(related);
         } else {
           setProduct(null);
         }
