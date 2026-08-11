@@ -4,7 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Search, SlidersHorizontal, ChevronDown } from "lucide-react";
+import { Search, SlidersHorizontal, ChevronDown, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { PRODUCTS } from "@/lib/products";
 
 const MAX_PRICE_LIMIT = 50000;
@@ -18,6 +19,19 @@ function ShopContent() {
   const [maxPrice, setMaxPrice] = useState(MAX_PRICE_LIMIT);
   const [sort, setSort] = useState("Newest");
   const [showCount, setShowCount] = useState(24);
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+
+  // Prevent background scrolling on mobile when filters drawer is open
+  useEffect(() => {
+    if (isMobileFilterOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isMobileFilterOpen]);
 
   // Fetch dynamic products from /api/products
   useEffect(() => {
@@ -165,7 +179,16 @@ function ShopContent() {
           <p className="text-muted-foreground mt-2 text-xs sm:text-sm md:text-base">{pageSubtitle}</p>
         </div>
 
-        <div className="flex items-center gap-6 text-sm">
+        <div className="flex items-center gap-3 sm:gap-6 text-sm flex-wrap">
+          {/* Mobile Filter Toggle Button */}
+          <button
+            onClick={() => setIsMobileFilterOpen(true)}
+            className="flex lg:hidden items-center gap-2 bg-background border border-border rounded px-4 py-1.5 hover:bg-neutral-50 transition-colors cursor-pointer text-foreground font-semibold"
+          >
+            <SlidersHorizontal size={14} />
+            <span>Filters</span>
+          </button>
+
           {/* Sort */}
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground">Sort:</span>
@@ -385,6 +408,164 @@ function ShopContent() {
           )}
         </div>
       </div>
+
+      {/* Mobile Filters Drawer */}
+      <AnimatePresence>
+        {isMobileFilterOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setIsMobileFilterOpen(false)}
+              className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-xs lg:hidden"
+            />
+
+            {/* Panel */}
+            <motion.aside
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "tween", duration: 0.28 }}
+              className="fixed top-0 right-0 z-[110] h-full w-80 bg-background shadow-2xl flex flex-col lg:hidden border-l border-border"
+            >
+              {/* Drawer Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                <h2 className="text-xl font-serif flex items-center gap-2 text-foreground">
+                  <SlidersHorizontal size={18} /> Filters
+                </h2>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={resetAll}
+                    className="text-xs underline text-muted-foreground hover:text-foreground"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    onClick={() => setIsMobileFilterOpen(false)}
+                    className="p-1 rounded bg-neutral-100 hover:bg-neutral-200 text-neutral-500 transition-all cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Drawer Content */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-8">
+                {/* Keyword Search */}
+                <div>
+                  <h3 className="text-xs font-bold text-muted-foreground tracking-widest uppercase mb-3">Keyword</h3>
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={keyword}
+                      onChange={(e) => setKeyword(e.target.value)}
+                      placeholder="Type product name..."
+                      className="w-full pl-9 pr-4 py-2 text-sm border border-border rounded bg-transparent focus:outline-none focus:border-foreground text-foreground"
+                    />
+                  </div>
+                </div>
+
+                {/* Categories */}
+                <div className="space-y-6">
+                  <h3 className="text-xs font-bold text-muted-foreground tracking-widest uppercase mb-1">Categories</h3>
+
+                  <button
+                    onClick={() => { setFilter({}); setIsMobileFilterOpen(false); }}
+                    className={`w-full text-left px-3 py-2 rounded transition-colors ${
+                      !filter.main && !filter.style ? "bg-neutral-100 font-medium text-foreground" : "text-muted-foreground hover:bg-neutral-50"
+                    }`}
+                  >
+                    All Categories
+                  </button>
+
+                  {CATEGORY_TREE.map((section) => (
+                    <div key={section.title} className="pt-2">
+                      <button
+                        onClick={() => { setFilter({ main: section.main }); setIsMobileFilterOpen(false); }}
+                        className={`w-full text-left px-3 py-1.5 font-medium transition-colors ${
+                          filter.main === section.main && !filter.sub ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {section.title}
+                      </button>
+                      <ul className="pl-6 mt-1 space-y-1 text-sm">
+                        {section.subs.map((sub) => (
+                          <li key={sub}>
+                            <button
+                              onClick={() => { setFilter({ main: section.main, sub }); setIsMobileFilterOpen(false); }}
+                              className={`w-full text-left px-3 py-1.5 rounded transition-colors ${
+                                filter.main === section.main && filter.sub === sub
+                                  ? "bg-neutral-100 font-medium text-foreground"
+                                  : "text-muted-foreground hover:bg-neutral-50"
+                              }`}
+                            >
+                              {sub}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+
+                  {/* Style Categories */}
+                  <div className="pt-4 border-t border-border/50">
+                    <h3 className="text-xs font-bold text-muted-foreground tracking-widest uppercase mb-3 px-3">Style-Based</h3>
+                    <ul className="space-y-1 text-sm">
+                      {STYLE_CATEGORIES.map((style) => (
+                        <li key={style}>
+                          <button
+                            onClick={() => { setFilter({ style }); setIsMobileFilterOpen(false); }}
+                            className={`w-full text-left px-3 py-1.5 rounded transition-colors ${
+                              filter.style === style ? "bg-neutral-100 font-medium text-foreground" : "text-muted-foreground hover:bg-neutral-50"
+                            }`}
+                          >
+                            {style}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Price Slider */}
+                <div>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-xs font-bold text-muted-foreground tracking-widest uppercase">Max Price</h3>
+                    <span className="font-bold text-sm text-foreground">Rs. {maxPrice.toLocaleString()}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max={MAX_PRICE_LIMIT}
+                    step="500"
+                    value={maxPrice}
+                    onChange={(e) => setMaxPrice(Number(e.target.value))}
+                    className="w-full accent-foreground cursor-pointer h-2 bg-neutral-200 rounded-lg appearance-none"
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                    <span>Rs. 0</span>
+                    <span>Rs. {MAX_PRICE_LIMIT.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Drawer Footer */}
+              <div className="p-4 border-t border-border bg-neutral-50 flex gap-3">
+                <button
+                  onClick={() => setIsMobileFilterOpen(false)}
+                  className="flex-1 bg-foreground text-background py-2.5 rounded-lg font-bold text-xs uppercase tracking-widest text-center hover:bg-neutral-800 transition-colors"
+                >
+                  Apply Filters
+                </button>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
