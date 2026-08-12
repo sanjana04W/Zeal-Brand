@@ -30,18 +30,26 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
           const firstAvailable = SIZES.find((s) => sizeStock[s] !== false) || "L";
           setSelectedSize(firstAvailable);
 
-          // Strictly match same mainCategory + subCategory (prevents cross-gender mixing).
-          // Show 2–4 products; hide section entirely if fewer than 2 matches.
-          const related = products
-            .filter(
-              (p: any) =>
-                p.mainCategory === found.mainCategory &&
-                p.subCategory === found.subCategory &&
-                String(p.id) !== String(found.id)
-            )
-            .slice(0, 4);
+          // Tier 1: same mainCategory + subCategory (most relevant, gender-safe)
+          const sameSub = products.filter(
+            (p: any) =>
+              p.mainCategory === found.mainCategory &&
+              p.subCategory === found.subCategory &&
+              String(p.id) !== String(found.id)
+          );
 
-          setRelatedProducts(related.length >= 2 ? related : []);
+          // Tier 2: same mainCategory, different subCategory (still gender-safe, fills remaining slots)
+          const usedIds = new Set(sameSub.map((p: any) => String(p.id)));
+          usedIds.add(String(found.id));
+          const sameMain = products.filter(
+            (p: any) =>
+              p.mainCategory === found.mainCategory &&
+              !usedIds.has(String(p.id))
+          );
+
+          // Combine tiers, cap at 4
+          const related = [...sameSub, ...sameMain].slice(0, 4);
+          setRelatedProducts(related);
         } else {
           setProduct(null);
         }
