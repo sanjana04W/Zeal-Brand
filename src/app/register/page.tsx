@@ -14,8 +14,9 @@ function RegisterForm() {
   const register = useAuthStore((state) => state.register);
   const showAuthToast = useAuthToastStore((state) => state.showAuthToast);
 
+  const prefilledEmail = searchParams.get("email") || "";
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(prefilledEmail);
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);

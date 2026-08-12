@@ -19,12 +19,14 @@ function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [accountNotFound, setAccountNotFound] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
     setLoading(true);
     setErrorMessage("");
+    setAccountNotFound(false);
 
     try {
       const res = await fetch("/api/auth", {
@@ -38,6 +40,9 @@ function SignInForm() {
       if (!res.ok || data.error) {
         const errorText = data.error || "Invalid email or password. Please try again.";
         setErrorMessage(errorText);
+        if (res.status === 404 || errorText.toLowerCase().includes("no account found")) {
+          setAccountNotFound(true);
+        }
         showAuthToast({
           type: "error",
           title: "Login Failed",
@@ -88,8 +93,18 @@ function SignInForm() {
 
         {/* Error Message Banner */}
         {errorMessage && (
-          <div className="mb-6 p-3.5 bg-red-50 border border-red-200 rounded-2xl text-xs font-bold text-red-600 text-center animate-in fade-in duration-200">
-            {errorMessage}
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl text-xs font-bold text-red-600 text-center animate-in fade-in duration-200 space-y-2">
+            <p>{errorMessage}</p>
+            {accountNotFound && (
+              <div className="pt-1">
+                <Link
+                  href={`/register?email=${encodeURIComponent(email)}&returnUrl=${encodeURIComponent(returnUrl)}`}
+                  className="inline-flex items-center gap-1.5 bg-red-600 text-white font-extrabold uppercase tracking-wider text-[11px] px-4 py-2 rounded-xl hover:bg-red-700 transition-all shadow-sm"
+                >
+                  Create Account Now <ArrowRight size={13} />
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
@@ -155,7 +170,7 @@ function SignInForm() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-neutral-900 hover:bg-black text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-md hover:shadow-xl flex items-center justify-center gap-2 group disabled:opacity-60"
+            className="w-full bg-neutral-900 hover:bg-black text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-md hover:shadow-xl flex items-center justify-center gap-2 group disabled:opacity-60 cursor-pointer"
           >
             {loading ? "Signing In..." : "Sign In"}
             {!loading && <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />}
@@ -166,12 +181,15 @@ function SignInForm() {
         <div className="mt-8 pt-6 border-t border-neutral-100 text-center space-y-2">
           <p className="text-xs text-neutral-500 font-semibold">
             New to Zeal Brand?{" "}
-            <Link href="/register" className="font-black text-neutral-900 hover:underline">
+            <Link
+              href={`/register?email=${encodeURIComponent(email)}&returnUrl=${encodeURIComponent(returnUrl)}`}
+              className="font-black text-neutral-900 hover:underline"
+            >
               Create an Account
             </Link>
           </p>
-          <p className="text-[11px] text-neutral-400 italic">
-            Tip: You can use any test credentials or register a new user!
+          <p className="text-[11px] text-neutral-400 font-medium">
+            🔒 Register once to log in seamlessly with your email &amp; password across all devices.
           </p>
         </div>
       </div>

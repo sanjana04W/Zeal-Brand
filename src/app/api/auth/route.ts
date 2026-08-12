@@ -88,47 +88,26 @@ export async function POST(request: Request) {
     if (action === "login") {
       const user = users.find((u: any) => u.email.toLowerCase() === cleanEmail);
 
-      if (user) {
-        if (user.password !== String(password)) {
-          return NextResponse.json(
-            { error: "Incorrect password. Please try again." },
-            { status: 401 }
-          );
-        }
-
-        const { password: _, ...userWithoutPassword } = user;
-        return NextResponse.json({
-          success: true,
-          message: "Signed in successfully",
-          user: userWithoutPassword,
-        });
-      } else {
-        // Auto-create user for new signins so login works seamlessly on any device
-        const nameFromEmail = cleanEmail.split("@")[0].replace(/[._-]/g, " ");
-        const formattedName = nameFromEmail
-          .split(" ")
-          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-          .join(" ");
-
-        const newUser = {
-          id: "usr_" + Date.now(),
-          name: formattedName || "Zeal Customer",
-          email: cleanEmail,
-          password: String(password),
-          phone: "+94 77 123 4567",
-          joinedDate: new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" }),
-        };
-
-        users.push(newUser);
-        saveUsers(users);
-
-        const { password: _, ...userWithoutPassword } = newUser;
-        return NextResponse.json({
-          success: true,
-          message: "Signed in successfully",
-          user: userWithoutPassword,
-        });
+      if (!user) {
+        return NextResponse.json(
+          { error: "No account found with this email address. Please create an account first." },
+          { status: 404 }
+        );
       }
+
+      if (user.password !== String(password)) {
+        return NextResponse.json(
+          { error: "Incorrect password. Please check your password and try again." },
+          { status: 401 }
+        );
+      }
+
+      const { password: _, ...userWithoutPassword } = user;
+      return NextResponse.json({
+        success: true,
+        message: "Signed in successfully",
+        user: userWithoutPassword,
+      });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
