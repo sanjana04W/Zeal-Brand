@@ -14,7 +14,7 @@ export default function Home() {
   useEffect(() => {
     async function loadProducts() {
       try {
-        const res = await fetch("/api/products");
+        const res = await fetch("/api/products", { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {

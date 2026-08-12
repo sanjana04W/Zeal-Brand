@@ -137,3 +137,40 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Authentication failed" }, { status: 500 });
   }
 }
+
+// PUT /api/auth (Update user profile / password)
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const { email, name, phone, address, newPassword } = body;
+
+    if (!email) {
+      return NextResponse.json({ error: "Email is required to update profile." }, { status: 400 });
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const users = getUsers();
+
+    const idx = users.findIndex((u: any) => u.email.toLowerCase() === cleanEmail);
+    if (idx === -1) {
+      return NextResponse.json({ error: "User not found." }, { status: 404 });
+    }
+
+    if (name !== undefined) users[idx].name = name;
+    if (phone !== undefined) users[idx].phone = phone;
+    if (address !== undefined) users[idx].address = address;
+    if (newPassword) users[idx].password = newPassword;
+
+    saveUsers(users);
+
+    const { password: _, ...updatedUser } = users[idx];
+    return NextResponse.json({
+      success: true,
+      message: "Profile updated successfully.",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("PUT /api/auth Error:", error);
+    return NextResponse.json({ error: "Failed to update profile." }, { status: 500 });
+  }
+}

@@ -21,7 +21,7 @@ export default function ProductDetail({ params }: { params: Promise<{ id: string
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const res = await fetch("/api/products");
+        const res = await fetch("/api/products", { cache: "no-store" });
         const products = await res.json();
         const found = products.find((p: any) => String(p.id) === String(resolvedParams.id));
         if (found) {

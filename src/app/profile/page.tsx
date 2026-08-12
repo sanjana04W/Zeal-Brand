@@ -163,16 +163,37 @@ export default function ProfilePage() {
     router.push("/");
   };
 
-  const handleSaveInfo = (e: React.FormEvent) => {
+  const handleSaveInfo = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
+
+    // Update client Zustand store (persisted in localStorage)
     updateUser({ name, phone, address });
     setEditingField(null);
     setInfoSavedSuccess(true);
+
+    // Sync to server API
+    try {
+      await fetch("/api/auth", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: user.email,
+          name,
+          phone,
+          address,
+        }),
+      });
+    } catch (err) {
+      console.warn("Could not sync profile to server:", err);
+    }
+
     setTimeout(() => setInfoSavedSuccess(false), 3500);
   };
 
-  const handleChangePassword = (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
     setPasswordError("");
 
     if (!newPassword) {
@@ -185,6 +206,26 @@ export default function ProfilePage() {
     }
     if (newPassword.length < 6) {
       setPasswordError("Password must be at least 6 characters.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/auth", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: user.email,
+          newPassword,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setPasswordError(data.error || "Failed to update password.");
+        return;
+      }
+    } catch {
+      setPasswordError("Network error. Please try again.");
       return;
     }
 
